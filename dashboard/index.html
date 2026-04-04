@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPX Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+    header {
+      padding: 20px 32px;
+      border-bottom: 1px solid #21262d;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 600; }
+    header span { font-size: 0.85rem; color: #8b949e; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 24px 32px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .card .label { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.6rem; font-weight: 700; margin-top: 6px; }
+    .card .sub   { font-size: 0.8rem; color: #8b949e; margin-top: 4px; }
+    .up   { color: #3fb950; }
+    .down { color: #f85149; }
+    section { padding: 0 32px 32px; }
+    section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; padding: 8px 12px; color: #8b949e; font-weight: 500; border-bottom: 1px solid #21262d; }
+    td { padding: 8px 12px; border-bottom: 1px solid #161b22; }
+    tr:hover td { background: #161b22; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge.call { background: #0d3321; color: #3fb950; }
+    .badge.put  { background: #3b0f0f; color: #f85149; }
+    #status { padding: 12px 32px; font-size: 0.8rem; color: #8b949e; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SPX Dashboard</h1>
+    <span id="last-updated"></span>
+  </header>
+
+  <div id="status">Loading data...</div>
+
+  <div class="grid" id="summary-cards"></div>
+
+  <section>
+    <h2>Top Options by Open Interest</h2>
+    <table id="options-table">
+      <thead>
+        <tr>
+          <th>Expiry</th>
+          <th>Type</th>
+          <th>Strike</th>
+          <th>Open Interest</th>
+          <th>IV</th>
+          <th>Delta</th>
+          <th>Bid</th>
+          <th>Ask</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <script>
+    async function loadCSV(path) {
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(`Cannot load ${path}: ${res.status}`);
+      const text = await res.text();
+      const lines = text.trim().split('\n');
+      const headers = lines[0].split(',');
+      return lines.slice(1).map(line => {
+        const vals = line.split(',');
+        const row = {};
+        headers.forEach((h, i) => row[h.trim()] = vals[i]?.trim() ?? '');
+        return row;
+      });
+    }
+
+    function fmt(n, dec = 2) {
+      const v = parseFloat(n);
+      return isNaN(v) ? '—' : v.toFixed(dec);
+    }
+
+    function fmtInt(n) {
+      const v = parseInt(n);
+      return isNaN(v) ? '—' : v.toLocaleString();
+    }
+
+    async function init() {
+      const status = document.getElementById('status');
+      try {
+        const [price, opts] = await Promise.all([
+          loadCSV('../spx_1min_jan2026.csv'),
+          loadCSV('../spx_options_snapshot.csv'),
+        ]);
+
+        // --- Summary cards ---
+        const first = price[0], last = price[price.length - 1];
+        const firstClose = parseFloat(first.close);
+        const lastClose  = parseFloat(last.close);
+        const pct = ((lastClose - firstClose) / firstClose * 100).toFixed(2);
+        const dir = pct >= 0 ? 'up' : 'down';
+
+        const highs  = price.map(r => parseFloat(r.high)).filter(v => !isNaN(v));
+        const lows   = price.map(r => parseFloat(r.low)).filter(v => !isNaN(v));
+        const monthHigh = Math.max(...highs).toFixed(2);
+        const monthLow  = Math.min(...lows).toFixed(2);
+
+        const ivs = opts.map(r => parseFloat(r.implied_volatility)).filter(v => !isNaN(v));
+        const avgIV = ivs.length ? (ivs.reduce((a,b)=>a+b,0)/ivs.length*100).toFixed(1) : '—';
+
+        const totalOI = opts.reduce((s, r) => s + (parseInt(r.open_interest) || 0), 0);
+        const calls = opts.filter(r => r.contract_type === 'call').length;
+        const puts  = opts.filter(r => r.contract_type === 'put').length;
+
+        const cards = [
+          { label: 'SPX Last Close (Jan)',  value: lastClose.toFixed(2), sub: `${pct >= 0 ? '+' : ''}${pct}% vs Jan open`, cls: dir },
+          { label: 'Jan Month High',        value: monthHigh, sub: 'Intraday 1-min', cls: 'up' },
+          { label: 'Jan Month Low',         value: monthLow,  sub: 'Intraday 1-min', cls: 'down' },
+          { label: '1-Min Bars',            value: price.length.toLocaleString(), sub: 'Jan 2026' },
+          { label: 'Avg Implied Vol',       value: `${avgIV}%`, sub: `${opts.length} contracts` },
+          { label: 'Total Open Interest',   value: fmtInt(totalOI), sub: `${calls} calls / ${puts} puts` },
+        ];
+
+        const grid = document.getElementById('summary-cards');
+        grid.innerHTML = cards.map(c => `
+          <div class="card">
+            <div class="label">${c.label}</div>
+            <div class="value ${c.cls || ''}">${c.value}</div>
+            <div class="sub">${c.sub}</div>
+          </div>`).join('');
+
+        // --- Options table: top 20 by OI ---
+        const sorted = [...opts]
+          .filter(r => parseInt(r.open_interest) > 0)
+          .sort((a, b) => parseInt(b.open_interest) - parseInt(a.open_interest))
+          .slice(0, 20);
+
+        const tbody = document.querySelector('#options-table tbody');
+        tbody.innerHTML = sorted.map(r => `
+          <tr>
+            <td>${r.expiration_date?.slice(0,10) ?? '—'}</td>
+            <td><span class="badge ${r.contract_type}">${r.contract_type}</span></td>
+            <td>${fmt(r.strike_price, 0)}</td>
+            <td>${fmtInt(r.open_interest)}</td>
+            <td>${fmt(parseFloat(r.implied_volatility)*100, 1)}%</td>
+            <td>${fmt(r.delta, 3)}</td>
+            <td>${fmt(r.bid, 2)}</td>
+            <td>${fmt(r.ask, 2)}</td>
+          </tr>`).join('');
+
+        status.textContent = '';
+        document.getElementById('last-updated').textContent =
+          `Data as of ${new Date().toLocaleString()}`;
+      } catch (e) {
+        status.textContent = `Error: ${e.message}. Run fetch_spx_data.py first, then serve from the project root.`;
+        console.error(e);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

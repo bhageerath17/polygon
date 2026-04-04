@@ -1,0 +1,26 @@
+[project]
+name = "polygon-backtest"
+version = "0.1.0"
+description = "SPX options backtesting with Polygon.io data"
+requires-python = ">=3.11"
+
+dependencies = [
+    "requests>=2.32",
+    "pandas>=2.2",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipykernel",
+    "jupyter",
+]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.uv]
+dev-dependencies = [
+    "ipykernel",
+    "jupyter",
+]
