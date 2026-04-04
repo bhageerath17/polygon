@@ -17,13 +17,25 @@ with open(_ROOT / "config.toml", "rb") as _f:
 class Settings:
     api_key: str
     base_url: str
+    # SPX
     ticker: str
     start_date: str
     end_date: str
     options_limit: int
+    # VIX
+    vix_ticker: str
+    vix_start_date: str
+    vix_end_date: str
+    # Analysis
+    lookback_mins: int
+    sig_levels: list
+    # Paths
     data_dir: Path
     price_csv: Path
     options_csv: Path
+    vix_csv: Path
+    analysis_csv: Path
+    analysis_json: Path
 
 
 settings = Settings(
@@ -33,7 +45,15 @@ settings = Settings(
     start_date=_cfg["data"]["start_date"],
     end_date=_cfg["data"]["end_date"],
     options_limit=_cfg["data"]["options_limit"],
+    vix_ticker=_cfg["vix"]["ticker"],
+    vix_start_date=_cfg["vix"]["start_date"],
+    vix_end_date=_cfg["vix"]["end_date"],
+    lookback_mins=_cfg["analysis"]["lookback_mins"],
+    sig_levels=_cfg["analysis"]["sig_levels"],
     data_dir=_ROOT / _cfg["paths"]["data_dir"],
     price_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["price_csv"],
     options_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["options_csv"],
+    vix_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["vix_csv"],
+    analysis_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_csv"],
+    analysis_json=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_json"],
 )

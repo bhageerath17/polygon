@@ -5,7 +5,7 @@ on:
     branches: [main]
   schedule:
     - cron: "0 22 * * 1-5"   # weekdays at 10 PM UTC (after US market close)
-  workflow_dispatch:           # manual trigger from GitHub UI
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,20 +33,21 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Fetch SPX data
+      - name: Fetch SPX + VIX data
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/fetch.py
 
+      - name: Run patches analysis
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: PYTHONPATH=. uv run python scripts/analyze.py
+
       - name: Copy data into dashboard
         run: |
-          cp data/spx_1min_jan2026.csv dashboard/
+          cp data/spx_1min.csv dashboard/
           cp data/spx_options_snapshot.csv dashboard/
-
-      - name: Update dashboard CSV paths to relative (same dir)
-        run: |
-          sed -i "s|'../spx_1min_jan2026.csv'|'spx_1min_jan2026.csv'|g" dashboard/index.html
-          sed -i "s|'../spx_options_snapshot.csv'|'spx_options_snapshot.csv'|g" dashboard/index.html
+          cp data/patches_analysis.json dashboard/
 
       - uses: actions/configure-pages@v5
 

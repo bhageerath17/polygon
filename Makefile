@@ -1,4 +1,4 @@
-.PHONY: setup fetch run serve clean
+.PHONY: setup fetch analyze run serve clean
 
 setup:
 	uv sync --all-extras
@@ -6,6 +6,9 @@ setup:
 
 fetch:
 	PYTHONPATH=. uv run python scripts/fetch.py
+
+analyze:
+	PYTHONPATH=. uv run python scripts/analyze.py
 
 run:
 	PYTHONPATH=. uv run python scripts/backtest.py
