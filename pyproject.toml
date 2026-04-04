@@ -16,8 +16,9 @@ dev = [
     "jupyter",
 ]
 
-[tool.setuptools]
-py-modules = []
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
 
 [tool.uv]
 dev-dependencies = [

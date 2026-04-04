@@ -3,6 +3,10 @@
 __pycache__/
 *.pyc
 *.pyo
+data/*.csv
+data/*.json
+.DS_Store
+*.egg-info/
 *.csv
 *.json
-.DS_Store
+pine.txt

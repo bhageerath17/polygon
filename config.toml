@@ -1,0 +1,13 @@
+[api]
+base_url = "https://api.polygon.io"
+
+[data]
+ticker        = "I:SPX"
+start_date    = "2026-01-02"
+end_date      = "2026-01-31"
+options_limit = 250
+
+[paths]
+data_dir    = "data"
+price_csv   = "spx_1min_jan2026.csv"
+options_csv = "spx_options_snapshot.csv"

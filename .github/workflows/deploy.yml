@@ -36,12 +36,12 @@ jobs:
       - name: Fetch SPX data
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: uv run python fetch_spx_data.py
+        run: PYTHONPATH=. uv run python scripts/fetch.py
 
       - name: Copy data into dashboard
         run: |
-          cp spx_1min_jan2026.csv dashboard/
-          cp spx_options_snapshot.csv dashboard/
+          cp data/spx_1min_jan2026.csv dashboard/
+          cp data/spx_options_snapshot.csv dashboard/
 
       - name: Update dashboard CSV paths to relative (same dir)
         run: |

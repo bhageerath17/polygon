@@ -1,18 +1,18 @@
-.PHONY: setup run fetch serve clean
+.PHONY: setup fetch run serve clean
 
 setup:
 	uv sync --all-extras
 	@echo "✓ Environment ready. Activate with: source .venv/bin/activate"
 
 fetch:
-	uv run python fetch_spx_data.py
+	PYTHONPATH=. uv run python scripts/fetch.py
 
 run:
-	uv run python polygon_backtest.py
+	PYTHONPATH=. uv run python scripts/backtest.py
 
 serve:
 	@echo "Open http://localhost:8000/dashboard/"
 	uv run python -m http.server 8000
 
 clean:
-	rm -rf .venv __pycache__ *.pyc
+	rm -rf .venv __pycache__ **/__pycache__ **/*.pyc
