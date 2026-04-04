@@ -1,0 +1,58 @@
+name: Fetch Data & Deploy Dashboard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 22 * * 1-5"   # weekdays at 10 PM UTC (after US market close)
+  workflow_dispatch:           # manual trigger from GitHub UI
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Fetch SPX data
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: uv run python fetch_spx_data.py
+
+      - name: Copy data into dashboard
+        run: |
+          cp spx_1min_jan2026.csv dashboard/
+          cp spx_options_snapshot.csv dashboard/
+
+      - name: Update dashboard CSV paths to relative (same dir)
+        run: |
+          sed -i "s|'../spx_1min_jan2026.csv'|'spx_1min_jan2026.csv'|g" dashboard/index.html
+          sed -i "s|'../spx_options_snapshot.csv'|'spx_options_snapshot.csv'|g" dashboard/index.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard/
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
