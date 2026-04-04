@@ -14,6 +14,7 @@ run:
 	PYTHONPATH=. uv run python scripts/backtest.py
 
 serve:
+	cp data/spx_1min.csv data/spx_options_snapshot.csv data/patches_analysis.json dashboard/
 	@echo "Open http://localhost:8000/dashboard/"
 	uv run python -m http.server 8000
 

@@ -5,6 +5,8 @@ __pycache__/
 *.pyo
 data/*.csv
 data/*.json
+dashboard/*.csv
+dashboard/*.json
 .DS_Store
 *.egg-info/
 *.csv

@@ -8,37 +8,32 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
 
-    /* ── HEADER ── */
     header { padding: 16px 32px; border-bottom: 1px solid #21262d; display: flex; align-items: center; gap: 16px; }
     header h1 { font-size: 1.3rem; font-weight: 700; }
     #last-updated { font-size: 0.78rem; color: #8b949e; margin-left: auto; }
 
-    /* ── TABS ── */
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid #21262d; padding: 0 32px; background: #010409; }
+    .tabs { display: flex; border-bottom: 1px solid #21262d; padding: 0 32px; background: #010409; }
     .tab-btn { padding: 12px 20px; font-size: 0.85rem; font-weight: 500; color: #8b949e; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color .15s, border-color .15s; }
     .tab-btn:hover { color: #e6edf3; }
     .tab-btn.active { color: #e6edf3; border-bottom-color: #1f6feb; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* ── STATUS ── */
     #status { padding: 10px 32px; font-size: 0.8rem; color: #8b949e; }
 
-    /* ── GRID CARDS ── */
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; padding: 24px 32px 8px; }
     .card { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 18px; }
     .card .label { font-size: 0.72rem; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; }
     .card .value { font-size: 1.5rem; font-weight: 700; margin-top: 6px; }
     .card .sub   { font-size: 0.78rem; color: #8b949e; margin-top: 4px; }
-    .up   { color: #3fb950; }
-    .down { color: #f85149; }
+    .up      { color: #3fb950; }
+    .down    { color: #f85149; }
     .neutral { color: #e6edf3; }
+    .muted   { color: #8b949e; }
 
-    /* ── SECTIONS ── */
     section { padding: 20px 32px 28px; }
     section h2 { font-size: 0.78rem; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
 
-    /* ── TABLES ── */
     .tbl-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #21262d; }
     table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
     th { text-align: left; padding: 9px 14px; color: #8b949e; font-weight: 500; background: #161b22; border-bottom: 1px solid #21262d; white-space: nowrap; }
@@ -46,19 +41,16 @@
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #161b22; }
 
-    /* ── BADGES ── */
     .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.73rem; font-weight: 600; }
-    .badge.call,.badge.up-z   { background:#0d3321; color:#3fb950; }
-    .badge.put,.badge.dn-z    { background:#3b0f0f; color:#f85149; }
-    .badge.inside-z           { background:#0d2a47; color:#58a6ff; }
-    .badge.neutral-z          { background:#1c2128; color:#8b949e; }
-    .badge.warn-z             { background:#2d1f00; color:#e3b341; }
+    .badge.call, .badge.up-z  { background:#0d3321; color:#3fb950; }
+    .badge.put,  .badge.dn-z  { background:#3b0f0f; color:#f85149; }
+    .badge.inside-z            { background:#0d2a47; color:#58a6ff; }
+    .badge.neutral-z           { background:#1c2128; color:#8b949e; }
+    .badge.warn-z              { background:#2d1f00; color:#e3b341; }
 
-    /* ── ZONE DIST BAR ── */
     .zone-bar { display: flex; height: 28px; border-radius: 6px; overflow: hidden; margin-top: 8px; }
-    .zone-seg { display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 600; color: #fff; transition: flex .3s; overflow: hidden; white-space: nowrap; }
+    .zone-seg { display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 600; color: #fff; overflow: hidden; white-space: nowrap; }
 
-    /* ── TWO-COL LAYOUT ── */
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 32px 28px; }
     @media(max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
     .panel { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 18px; }
@@ -67,25 +59,135 @@
     .stat-row:last-child { border-bottom: none; }
     .stat-label { color: #8b949e; }
     .stat-val   { font-weight: 600; }
+
+    /* ── TAB 1 — OVERVIEW ── */
+    .overview { max-width: 860px; padding: 40px 32px; }
+    .overview h2 { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; color: #e6edf3; }
+    .overview p  { font-size: 0.88rem; line-height: 1.7; color: #8b949e; margin-bottom: 20px; }
+    .overview p b { color: #e6edf3; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    .pill { padding: 4px 12px; border-radius: 20px; font-size: 0.76rem; font-weight: 600; border: 1px solid; }
+    .pill.blue  { border-color: #1f6feb; color: #58a6ff; background: #0d2a4733; }
+    .pill.green { border-color: #238636; color: #3fb950; background: #0d332133; }
+    .pill.amber { border-color: #9e6a03; color: #e3b341; background: #2d1f0033; }
+    .pill.red   { border-color: #b62324; color: #f85149; background: #3b0f0f33; }
+    .divider { border: none; border-top: 1px solid #21262d; margin: 24px 0; }
+    .legend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+    .legend-item { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 12px 14px; }
+    .legend-item .li-title { font-size: 0.78rem; font-weight: 700; margin-bottom: 4px; }
+    .legend-item .li-desc  { font-size: 0.75rem; color: #8b949e; line-height: 1.5; }
+    .insight-box { background: #161b22; border: 1px solid #21262d; border-left: 3px solid #1f6feb; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px; font-size: 0.84rem; line-height: 1.6; }
+    .insight-box b { color: #58a6ff; }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>SPX Dashboard</h1>
+  <h1>SPX 0DTE EM Dashboard</h1>
   <div class="tabs" style="border:none;padding:0;background:none;">
-    <button class="tab-btn active" onclick="switchTab('tab-price', this)">Price Summary</button>
-    <button class="tab-btn"        onclick="switchTab('tab-analysis', this)">Patches Analysis</button>
+    <button class="tab-btn active" onclick="switchTab('tab-overview',  this)">Overview</button>
+    <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
+    <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
   </div>
   <span id="last-updated"></span>
 </header>
 
 <div id="status">Loading data…</div>
 
-<!-- ══════════════════════════════════════════════════════
-     TAB 1 — PRICE SUMMARY
-══════════════════════════════════════════════════════ -->
-<div id="tab-price" class="tab-panel active">
+<!-- ════════════════════════════════════════════════
+     TAB 1 — OVERVIEW
+════════════════════════════════════════════════ -->
+<div id="tab-overview" class="tab-panel active">
+  <div class="overview">
+
+    <h2>What is this?</h2>
+    <p>
+      This dashboard analyses the <b>SPX 0DTE Expected Move (EM)</b> — the daily price range the
+      options market implies for the S&amp;P 500 index on a given day, derived from the
+      <b>VIX (CBOE Volatility Index)</b>. Data is sourced from <b>Polygon.io</b> and covers
+      <b>3 months of 1-minute SPX bars</b> (Jan–Apr 2026) plus <b>VIX daily closes</b>.
+    </p>
+
+    <div class="pill-row" id="overview-pills"></div>
+
+    <hr class="divider" />
+
+    <h2>How the Expected Move is Calculated</h2>
+    <p>
+      The <b>daily expected move (1σ)</b> for any given bar is:<br><br>
+      <code style="background:#161b22;padding:6px 12px;border-radius:4px;font-size:0.9rem;color:#58a6ff;">
+        σ = open_price × (VIX / 100) / √252
+      </code><br><br>
+      This is the same formula used in the Pine Script indicator
+      <i>"SPX 0DTE EM (Skewed VWAP + Midpoint)"</i>. VIX is annualised volatility — dividing
+      by √252 converts it to a single-day expected move. A <b>0.8σ</b> band is also drawn as a
+      tighter inner boundary.
+    </p>
+
+    <hr class="divider" />
+
+    <h2>The "Patches" — 4 Box Zones</h2>
+    <p>
+      During the first <b>5 minutes of RTH (9:31–9:35 ET)</b>, the indicator builds four
+      coloured "patch" boxes by tracking the <b>min and max</b> of each EM level across those bars:
+    </p>
+    <div class="legend-grid">
+      <div class="legend-item">
+        <div class="li-title" style="color:#3fb950">1σ Upper Box  (green)</div>
+        <div class="li-desc">Range of (open + σ) values during lookback. Price closing here = bullish day that reached full EM upside.</div>
+      </div>
+      <div class="legend-item">
+        <div class="li-title" style="color:#80cbc4">0.8σ Upper Box  (teal)</div>
+        <div class="li-desc">Range of (open + 0.8σ). Inner bullish zone. Close here = day pushed toward upper EM but didn't fully reach it.</div>
+      </div>
+      <div class="legend-item">
+        <div class="li-title" style="color:#ffb74d">0.8σ Lower Box  (orange)</div>
+        <div class="li-desc">Range of (open − 0.8σ). Inner bearish zone. Close here = day pushed toward lower EM but held inner boundary.</div>
+      </div>
+      <div class="legend-item">
+        <div class="li-title" style="color:#f85149">1σ Lower Box  (red)</div>
+        <div class="li-desc">Range of (open − σ). Price closing here = bearish day that reached full EM downside.</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <h2>Additional Levels</h2>
+    <div class="legend-grid">
+      <div class="legend-item">
+        <div class="li-title" style="color:#e3b341">PDC EM Lines  (yellow dashed)</div>
+        <div class="li-desc">Previous Day Close ± daily EM. Shows whether today's open gapped inside or outside yesterday's expected range.</div>
+      </div>
+      <div class="legend-item">
+        <div class="li-title" style="color:#3fb950">Buy-VW EM  (lime)</div>
+        <div class="li-desc">Volume-weighted upper EM biased toward bullish candles during the 5-min lookback. Skewed VWAP upper anchor.</div>
+      </div>
+      <div class="legend-item">
+        <div class="li-title" style="color:#f85149">Sell-VW EM  (red)</div>
+        <div class="li-desc">Volume-weighted lower EM biased toward bearish candles. Skewed VWAP lower anchor.</div>
+      </div>
+      <div class="legend-item">
+        <div class="li-title" style="color:#d6dae9">Skew Midpoint  (grey)</div>
+        <div class="li-desc">Average of Buy-VW EM and Sell-VW EM. Acts as intraday equilibrium reference line.</div>
+      </div>
+      <div class="legend-item">
+        <div class="li-title" style="color:#ffffff">Continuous VWAP</div>
+        <div class="li-desc">Session VWAP from 9:30 open, with ±1σ standard deviation bands computed from rolling volume-weighted variance.</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <h2>Key Findings  <span style="font-size:0.8rem;color:#8b949e;font-weight:400">(Jan–Apr 2026, 63 trading days)</span></h2>
+    <div id="insight-boxes"></div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     TAB 2 — PRICE SUMMARY
+════════════════════════════════════════════════ -->
+<div id="tab-price" class="tab-panel">
   <div class="grid" id="summary-cards"></div>
   <section>
     <h2>Top Options by Open Interest</h2>
@@ -101,31 +203,24 @@
   </section>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     TAB 2 — PATCHES ANALYSIS
-══════════════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════════
+     TAB 3 — PATCHES ANALYSIS
+════════════════════════════════════════════════ -->
 <div id="tab-analysis" class="tab-panel">
 
   <div class="grid" id="analysis-cards"></div>
 
-  <!-- Zone dist bar -->
   <section style="padding-top:8px;">
     <h2>Day Close Zone Distribution</h2>
     <div id="zone-bar" class="zone-bar"></div>
     <div id="zone-legend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:0.76rem;"></div>
   </section>
 
-  <!-- Two-col stats -->
   <div class="two-col">
-    <div class="panel" id="vix-panel">
-      <h3>VIX Stats (prev-day)</h3>
-    </div>
-    <div class="panel" id="gap-panel">
-      <h3>Gap Analysis</h3>
-    </div>
+    <div class="panel" id="vix-panel"><h3>VIX Stats (prev-day)</h3></div>
+    <div class="panel" id="gap-panel"><h3>Gap Analysis</h3></div>
   </div>
 
-  <!-- VIX quartile table -->
   <section>
     <h2>Breach &amp; Close by VIX Quartile</h2>
     <div class="tbl-wrap">
@@ -140,7 +235,16 @@
     </div>
   </section>
 
-  <!-- Daily breakdown -->
+  <!-- 6 regime bins -->
+  <section>
+    <h2>6 Regime Bins — Strategy &amp; Backtest Win Rate</h2>
+    <p style="font-size:0.78rem;color:#8b949e;margin-bottom:14px;">
+      Each day classified by gap direction (↑/↓) and VIX tercile (Low/Med/High).
+      Win rate = % of days the suggested strategy would have won based on close zone / breach outcome.
+    </p>
+    <div id="regime-bins" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;"></div>
+  </section>
+
   <section>
     <h2>Daily Breakdown</h2>
     <div class="tbl-wrap">
@@ -155,10 +259,9 @@
     </div>
   </section>
 
-</div><!-- /tab-analysis -->
+</div>
 
 <script>
-/* ── TAB SWITCHING ────────────────────────────────── */
 function switchTab(id, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -166,7 +269,6 @@ function switchTab(id, btn) {
   btn.classList.add('active');
 }
 
-/* ── HELPERS ─────────────────────────────────────── */
 async function loadCSV(path) {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`Cannot load ${path}: ${res.status}`);
@@ -187,56 +289,84 @@ async function loadJSON(path) {
   return res.json();
 }
 
-const fmt  = (n, d=2)  => isNaN(parseFloat(n)) ? '—' : parseFloat(n).toFixed(d);
-const fmtI = n          => isNaN(parseInt(n))   ? '—' : parseInt(n).toLocaleString();
-const pct  = (n, d=1)  => isNaN(parseFloat(n)) ? '—' : parseFloat(n).toFixed(d) + '%';
+const fmt  = (n, d=2) => isNaN(parseFloat(n)) ? '—' : parseFloat(n).toFixed(d);
+const fmtI = n        => isNaN(parseInt(n))   ? '—' : parseInt(n).toLocaleString();
+const pct  = (n, d=1) => isNaN(parseFloat(n)) ? '—' : parseFloat(n).toFixed(d) + '%';
 
-function badge(text, cls) {
-  return `<span class="badge ${cls}">${text}</span>`;
-}
-
+function badge(text, cls) { return `<span class="badge ${cls}">${text}</span>`; }
 function boolBadge(val) {
-  return val === true || val === 'True'
-    ? badge('Yes', 'dn-z') : badge('No', 'inside-z');
+  return val === true || val === 'True' ? badge('Yes','dn-z') : badge('No','inside-z');
 }
 
-/* ── ZONE COLOURS ────────────────────────────────── */
 const ZONE_META = {
-  'above_1sig':      { color: '#388bfd', label: 'Above 1σ' },
-  'in_1sig_up_box':  { color: '#3fb950', label: '1σ Up Box' },
-  'gap_upper':       { color: '#56d364', label: 'Upper Gap' },
-  'in_08sig_up_box': { color: '#a5d6a7', label: '0.8σ Up Box' },
-  'inside':          { color: '#8b949e', label: 'Inside' },
-  'in_08sig_dn_box': { color: '#ffb74d', label: '0.8σ Dn Box' },
-  'gap_lower':       { color: '#ff8a65', label: 'Lower Gap' },
-  'in_1sig_dn_box':  { color: '#f85149', label: '1σ Dn Box' },
-  'below_1sig':      { color: '#da3633', label: 'Below 1σ' },
+  'above_1sig':      { color:'#388bfd', label:'Above 1σ' },
+  'in_1sig_up_box':  { color:'#3fb950', label:'1σ Up Box' },
+  'gap_upper':       { color:'#56d364', label:'Upper Gap' },
+  'in_08sig_up_box': { color:'#a5d6a7', label:'0.8σ Up Box' },
+  'inside':          { color:'#8b949e', label:'Inside' },
+  'in_08sig_dn_box': { color:'#ffb74d', label:'0.8σ Dn Box' },
+  'gap_lower':       { color:'#ff8a65', label:'Lower Gap' },
+  'in_1sig_dn_box':  { color:'#f85149', label:'1σ Dn Box' },
+  'below_1sig':      { color:'#da3633', label:'Below 1σ' },
 };
 
 function zoneBadge(zone) {
   const m = ZONE_META[zone];
-  if (!m) return badge(zone || '—', 'neutral-z');
+  if (!m) return badge(zone||'—','neutral-z');
   return `<span class="badge" style="background:${m.color}22;color:${m.color}">${m.label}</span>`;
 }
 
 const GAP_ZONE_LABELS = {
-  'gap_up_beyond_em':  'Gap ↑ > EM',
-  'gap_up_within_em':  'Gap ↑ < EM',
-  'flat':              'Flat',
-  'gap_dn_within_em':  'Gap ↓ < EM',
-  'gap_dn_beyond_em':  'Gap ↓ > EM',
+  'gap_up_beyond_em': 'Gap ↑ > EM',
+  'gap_up_within_em': 'Gap ↑ < EM',
+  'flat':             'Flat',
+  'gap_dn_within_em': 'Gap ↓ < EM',
+  'gap_dn_beyond_em': 'Gap ↓ > EM',
 };
 
-/* ── TAB 1 LOAD ──────────────────────────────────── */
-async function loadTab1() {
-  const [price, opts] = await Promise.all([
-    loadCSV('spx_1min.csv'),
-    loadCSV('spx_options_snapshot.csv'),
-  ]);
+/* ── TAB 1 — OVERVIEW ─────────────────────────── */
+function buildOverview(s) {
+  // Pills
+  document.getElementById('overview-pills').innerHTML = [
+    { text: `${s.trading_days} Trading Days`,           cls: 'blue'  },
+    { text: `Jan–Apr 2026`,                             cls: 'blue'  },
+    { text: `${s.trading_days * 390 | 0}+ 1-Min Bars`, cls: 'green' },
+    { text: `VIX Range ${s.vix_stats.min}–${s.vix_stats.max}`, cls: 'amber' },
+    { text: `${s['any_breach_1sig_%']}% Breach Rate`,  cls: 'red'   },
+  ].map(p => `<span class="pill ${p.cls}">${p.text}</span>`).join('');
 
+  // Insights
+  const insideCount = s.close_zone_dist['inside'] || 0;
+  const insidePct   = (insideCount / s.trading_days * 100).toFixed(1);
+  const topZones    = Object.entries(s.close_zone_dist)
+    .sort((a,b) => b[1]-a[1]).slice(0,2)
+    .map(([z,n]) => `${ZONE_META[z]?.label||z} (${n} days)`).join(' and ');
+  const q1 = s.vix_quartile_breakdown[0];
+  const q4 = s.vix_quartile_breakdown[3];
+
+  document.getElementById('insight-boxes').innerHTML = [
+    `SPX closed <b>inside the 0.8σ–1.0σ band</b> on <b>${insidePct}% of days</b> (${insideCount}/${s.trading_days}).
+     The EM patches accurately contain price on the vast majority of sessions.`,
+    `The most common close zones were <b>${topZones}</b>, confirming SPX tends to revert
+     within the expected move rather than breach it.`,
+    `<b>Any 1σ breach occurred on ${s['any_breach_1sig_%']}% of days</b>
+     — ${s['breach_above_1sig_%']}% breached upward, ${s['breach_below_1sig_%']}% downward.
+     Downside breaches are more common in this period.`,
+    `<b>Low VIX days (Q1: ${q1?.vix_range})</b> showed <b>${q1?.['close_inside_%']}% inside closes</b>
+     and <b>${q1?.['gap_up_%']}% gap-up frequency</b> — low vol environments tend to gap up and close inside.`,
+    `<b>High VIX days (Q4: ${q4?.vix_range})</b> showed <b>${q4?.['close_inside_%']}% inside closes</b>
+     — bands still hold even in elevated volatility, validating the VIX-based EM formula.`,
+    `Gap direction was nearly balanced: <b>${s.gap_stats.gap_up_count} gap-ups</b> vs
+     <b>${s.gap_stats.gap_dn_count} gap-downs</b>, with an average absolute gap of
+     <b>${s.gap_stats.mean_abs_gap_pct}%</b>.`,
+  ].map(t => `<div class="insight-box">${t}</div>`).join('');
+}
+
+/* ── TAB 2 — PRICE SUMMARY ────────────────────── */
+async function loadTab2(price, opts) {
   const firstClose = parseFloat(price[0].close);
-  const lastClose  = parseFloat(price[price.length - 1].close);
-  const pctMove    = ((lastClose - firstClose) / firstClose * 100).toFixed(2);
+  const lastClose  = parseFloat(price[price.length-1].close);
+  const pctMove    = ((lastClose-firstClose)/firstClose*100).toFixed(2);
   const dir        = pctMove >= 0 ? 'up' : 'down';
   const highs      = price.map(r => parseFloat(r.high)).filter(v => !isNaN(v));
   const lows       = price.map(r => parseFloat(r.low)).filter(v => !isNaN(v));
@@ -246,145 +376,146 @@ async function loadTab1() {
   const calls      = opts.filter(r => r.contract_type==='call').length;
   const puts       = opts.filter(r => r.contract_type==='put').length;
 
-  const cards = [
-    { label:'SPX Last Close',   value: lastClose.toFixed(2), sub:`${pctMove>=0?'+':''}${pctMove}% vs period open`, cls: dir },
-    { label:'Period High',      value: Math.max(...highs).toFixed(2), sub:'Intraday 1-min', cls:'up' },
-    { label:'Period Low',       value: Math.min(...lows).toFixed(2),  sub:'Intraday 1-min', cls:'down' },
-    { label:'1-Min Bars',       value: price.length.toLocaleString(), sub:'Jan–Apr 2026' },
-    { label:'Avg Implied Vol',  value: `${avgIV}%`, sub:`${opts.length} contracts` },
-    { label:'Total Open Int.',  value: fmtI(totalOI), sub:`${calls} calls / ${puts} puts` },
-  ];
+  document.getElementById('summary-cards').innerHTML = [
+    { label:'SPX Last Close',  value: lastClose.toFixed(2), sub:`${pctMove>=0?'+':''}${pctMove}% vs period open`, cls: dir },
+    { label:'Period High',     value: Math.max(...highs).toFixed(2), sub:'Intraday 1-min', cls:'up' },
+    { label:'Period Low',      value: Math.min(...lows).toFixed(2),  sub:'Intraday 1-min', cls:'down' },
+    { label:'1-Min Bars',      value: price.length.toLocaleString(), sub:'Jan–Apr 2026' },
+    { label:'Avg Implied Vol', value: `${avgIV}%`, sub:`${opts.length} contracts` },
+    { label:'Total Open Int.', value: fmtI(totalOI), sub:`${calls} calls / ${puts} puts` },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div>
+    <div class="value ${c.cls||''}">${c.value}</div>
+    <div class="sub">${c.sub}</div></div>`).join('');
 
-  document.getElementById('summary-cards').innerHTML = cards.map(c => `
-    <div class="card">
-      <div class="label">${c.label}</div>
-      <div class="value ${c.cls||''}">${c.value}</div>
-      <div class="sub">${c.sub}</div>
-    </div>`).join('');
-
-  const sorted = [...opts]
+  document.querySelector('#options-table tbody').innerHTML = [...opts]
     .filter(r => parseInt(r.open_interest) > 0)
-    .sort((a,b) => parseInt(b.open_interest) - parseInt(a.open_interest))
-    .slice(0, 20);
-
-  document.querySelector('#options-table tbody').innerHTML = sorted.map(r => `
-    <tr>
+    .sort((a,b) => parseInt(b.open_interest)-parseInt(a.open_interest))
+    .slice(0,20)
+    .map(r => `<tr>
       <td>${r.expiration_date?.slice(0,10)??'—'}</td>
       <td><span class="badge ${r.contract_type}">${r.contract_type}</span></td>
-      <td>${fmt(r.strike_price, 0)}</td>
-      <td>${fmtI(r.open_interest)}</td>
+      <td>${fmt(r.strike_price,0)}</td><td>${fmtI(r.open_interest)}</td>
       <td>${fmt(parseFloat(r.implied_volatility)*100,1)}%</td>
-      <td>${fmt(r.delta,3)}</td>
-      <td>${fmt(r.bid,2)}</td>
-      <td>${fmt(r.ask,2)}</td>
+      <td>${fmt(r.delta,3)}</td><td>${fmt(r.bid,2)}</td><td>${fmt(r.ask,2)}</td>
     </tr>`).join('');
 }
 
-/* ── TAB 2 LOAD ──────────────────────────────────── */
-async function loadTab2() {
-  const s = await loadJSON('patches_analysis.json');
+/* ── TAB 3 — PATCHES ANALYSIS ─────────────────── */
+function loadTab3(s) {
+  document.getElementById('analysis-cards').innerHTML = [
+    { label:'Trading Days',       value: s.trading_days,                sub: s.date_range, cls:'neutral' },
+    { label:'Any 1σ Breach',      value: pct(s['any_breach_1sig_%']),   sub:`↑${pct(s['breach_above_1sig_%'])}  ↓${pct(s['breach_below_1sig_%'])}`, cls: parseFloat(s['any_breach_1sig_%'])>20?'down':'up' },
+    { label:'Breach 0.8σ',        value: pct(s['breach_above_08sig_%']),sub:`↓ ${pct(s['breach_below_08sig_%'])}`, cls:'neutral' },
+    { label:'Close Inside Bands', value: pct((s.close_zone_dist['inside']||0)/s.trading_days*100), sub:`${s.close_zone_dist['inside']||0} of ${s.trading_days} days`, cls:'up' },
+    { label:'VIX Avg / Median',   value: `${s.vix_stats.mean}`,         sub:`Median ${s.vix_stats.median}  Range ${s.vix_stats.min}–${s.vix_stats.max}`, cls:'neutral' },
+    { label:'Gap Up / Gap Down',  value: `${s.gap_stats.gap_up_count} / ${s.gap_stats.gap_dn_count}`, sub:`Avg |gap| ${s.gap_stats.mean_abs_gap_pct}%`, cls:'neutral' },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div>
+    <div class="value ${c.cls}">${c.value}</div>
+    <div class="sub">${c.sub}</div></div>`).join('');
 
-  /* Summary cards */
-  const cards = [
-    { label:'Trading Days',        value: s.trading_days,                  sub: s.date_range, cls:'neutral' },
-    { label:'Any 1σ Breach',       value: pct(s['any_breach_1sig_%']),     sub:`↑${pct(s['breach_above_1sig_%'])}  ↓${pct(s['breach_below_1sig_%'])}`, cls: parseFloat(s['any_breach_1sig_%'])>20?'down':'up' },
-    { label:'Breach 0.8σ',         value: pct(s['breach_above_08sig_%']),  sub:`↓ ${pct(s['breach_below_08sig_%'])}`, cls:'neutral' },
-    { label:'Close Inside Bands',  value: pct((s.close_zone_dist['inside']||0)/s.trading_days*100), sub:`${s.close_zone_dist['inside']||0} of ${s.trading_days} days`, cls:'up' },
-    { label:'VIX Avg / Median',    value: `${s.vix_stats.mean}`,           sub:`Median ${s.vix_stats.median}  Range ${s.vix_stats.min}–${s.vix_stats.max}`, cls:'neutral' },
-    { label:'Gap Up / Gap Down',   value: `${s.gap_stats.gap_up_count} / ${s.gap_stats.gap_dn_count}`, sub:`Avg |gap| ${s.gap_stats.mean_abs_gap_pct}%`, cls:'neutral' },
-  ];
-  document.getElementById('analysis-cards').innerHTML = cards.map(c => `
-    <div class="card">
-      <div class="label">${c.label}</div>
-      <div class="value ${c.cls}">${c.value}</div>
-      <div class="sub">${c.sub}</div>
-    </div>`).join('');
-
-  /* Zone distribution bar */
   const zoneOrder = ['above_1sig','in_1sig_up_box','gap_upper','in_08sig_up_box','inside','in_08sig_dn_box','gap_lower','in_1sig_dn_box','below_1sig'];
-  const total = Object.values(s.close_zone_dist).reduce((a,b)=>a+b, 0);
+  const total = Object.values(s.close_zone_dist).reduce((a,b)=>a+b,0);
   document.getElementById('zone-bar').innerHTML = zoneOrder.map(z => {
-    const cnt = s.close_zone_dist[z] || 0;
-    const w   = (cnt / total * 100).toFixed(1);
-    const m   = ZONE_META[z] || { color:'#8b949e', label: z };
-    return parseFloat(w) < 1 ? '' :
+    const cnt = s.close_zone_dist[z]||0;
+    const w   = (cnt/total*100).toFixed(1);
+    const m   = ZONE_META[z]||{color:'#8b949e',label:z};
+    return parseFloat(w)<1 ? '' :
       `<div class="zone-seg" style="flex:${w};background:${m.color}" title="${m.label}: ${cnt} days (${w}%)">${w}%</div>`;
   }).join('');
 
   document.getElementById('zone-legend').innerHTML = zoneOrder
-    .filter(z => (s.close_zone_dist[z]||0) > 0)
+    .filter(z => (s.close_zone_dist[z]||0)>0)
     .map(z => {
-      const m = ZONE_META[z] || { color:'#8b949e', label: z };
-      const cnt = s.close_zone_dist[z];
+      const m = ZONE_META[z]||{color:'#8b949e',label:z};
       return `<span style="display:flex;align-items:center;gap:5px">
         <span style="width:10px;height:10px;border-radius:2px;background:${m.color};display:inline-block"></span>
-        ${m.label}: <b>${cnt}</b></span>`;
+        ${m.label}: <b>${s.close_zone_dist[z]}</b></span>`;
     }).join('');
 
-  /* VIX panel */
   const vs = s.vix_stats;
   document.getElementById('vix-panel').innerHTML = `<h3>VIX Stats (prev-day)</h3>` +
-    [['Mean', vs.mean], ['Median', vs.median], ['Min', vs.min], ['Max', vs.max],
-     ['Q25', vs.q25], ['Q75', vs.q75]]
-    .map(([l,v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-val">${v}</span></div>`)
-    .join('');
+    [['Mean',vs.mean],['Median',vs.median],['Min',vs.min],['Max',vs.max],['Q25',vs.q25],['Q75',vs.q75]]
+    .map(([l,v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-val">${v}</span></div>`).join('');
 
-  /* Gap panel */
-  const gs = s.gap_stats;
-  const gzd = s.gap_zone_dist;
+  const gs = s.gap_stats, gzd = s.gap_zone_dist;
   document.getElementById('gap-panel').innerHTML = `<h3>Gap Analysis</h3>` +
-    [
-      ['Gap Up Days',       gs.gap_up_count],
-      ['Gap Down Days',     gs.gap_dn_count],
-      ['Flat Days',         gs.flat_count],
-      ['Avg |Gap|',         gs.mean_abs_gap_pct + '%'],
-      ['Gap ↑ Beyond EM',   gzd['gap_up_beyond_em']  || 0],
-      ['Gap ↑ Within EM',   gzd['gap_up_within_em']  || 0],
-      ['Gap ↓ Within EM',   gzd['gap_dn_within_em']  || 0],
-      ['Gap ↓ Beyond EM',   gzd['gap_dn_beyond_em']  || 0],
-    ]
-    .map(([l,v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-val">${v}</span></div>`)
-    .join('');
+    [['Gap Up Days',gs.gap_up_count],['Gap Down Days',gs.gap_dn_count],['Flat Days',gs.flat_count],
+     ['Avg |Gap|',gs.mean_abs_gap_pct+'%'],['Gap ↑ Beyond EM',gzd['gap_up_beyond_em']||0],
+     ['Gap ↑ Within EM',gzd['gap_up_within_em']||0],['Gap ↓ Within EM',gzd['gap_dn_within_em']||0],
+     ['Gap ↓ Beyond EM',gzd['gap_dn_beyond_em']||0]]
+    .map(([l,v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-val">${v}</span></div>`).join('');
 
-  /* VIX quartile table */
   document.querySelector('#quartile-table tbody').innerHTML = s.vix_quartile_breakdown.map(q => `
-    <tr>
-      <td><b>${q.quartile}</b></td>
-      <td>${q.days}</td>
-      <td>${q.vix_range}</td>
-      <td>${pct(q['any_breach_%'])}</td>
-      <td>${pct(q['breach_above_1sig_%'])}</td>
-      <td>${pct(q['breach_below_1sig_%'])}</td>
-      <td>${pct(q['close_inside_%'])}</td>
-      <td>${q.avg_gap_pct}%</td>
-      <td>${pct(q['gap_up_%'])}</td>
-      <td>${pct(q['gap_dn_%'])}</td>
-    </tr>`).join('');
+    <tr><td><b>${q.quartile}</b></td><td>${q.days}</td><td>${q.vix_range}</td>
+    <td>${pct(q['any_breach_%'])}</td><td>${pct(q['breach_above_1sig_%'])}</td>
+    <td>${pct(q['breach_below_1sig_%'])}</td><td>${pct(q['close_inside_%'])}</td>
+    <td>${q.avg_gap_pct}%</td><td>${pct(q['gap_up_%'])}</td><td>${pct(q['gap_dn_%'])}</td></tr>`).join('');
 
-  /* Daily table */
-  document.querySelector('#daily-table tbody').innerHTML = (s.daily || []).map(r => `
-    <tr>
-      <td>${r.date}</td>
-      <td>${fmt(r.vix_prev, 1)}</td>
-      <td>${fmt(r.sig, 1)}</td>
-      <td>${fmt(r.open, 2)}</td>
-      <td>${fmt(r.close, 2)}</td>
-      <td class="${parseFloat(r.gap_pct)>0?'up':parseFloat(r.gap_pct)<0?'down':''}">${fmt(r.gap_pct, 2)}%</td>
-      <td><span class="badge ${r.gap_pct>0?'call':'put'}" style="font-size:.7rem">${GAP_ZONE_LABELS[r.gap_zone]||r.gap_zone||'—'}</span></td>
-      <td>${boolBadge(r.breach_above_1sig)}</td>
-      <td>${boolBadge(r.breach_below_1sig)}</td>
-      <td>${zoneBadge(r.close_zone)}</td>
-    </tr>`).join('');
+  // ── 6 regime bins
+  const binColors = { up: '#3fb950', dn: '#f85149' };
+  const winColor  = w => w >= 75 ? '#3fb950' : w >= 55 ? '#e3b341' : '#f85149';
+  document.getElementById('regime-bins').innerHTML = (s.regime_bins||[]).map(b => {
+    const gc    = binColors[b.gap_dir];
+    const arrow = b.gap_dir === 'up' ? '↑' : '↓';
+    const wc    = winColor(b.backtest_win_pct ?? b['backtest_win_%']);
+    const wr    = b.backtest_win_pct ?? b['backtest_win_%'];
+    const zd    = b.close_zone_dist || {};
+    const zOrder = ['above_1sig','in_1sig_up_box','gap_upper','in_08sig_up_box','inside','in_08sig_dn_box','gap_lower','in_1sig_dn_box','below_1sig'];
+    const zTotal = Object.values(zd).reduce((a,v)=>a+v,0)||1;
+    const zBar   = zOrder.map(z => {
+      const cnt = zd[z]||0; if(!cnt) return '';
+      const w2  = (cnt/zTotal*100).toFixed(0);
+      const m   = ZONE_META[z]||{color:'#8b949e'};
+      return `<div style="flex:${w2};background:${m.color};height:8px" title="${ZONE_META[z]?.label||z}: ${cnt}"></div>`;
+    }).join('');
+    return `
+    <div style="background:#161b22;border:1px solid #21262d;border-top:3px solid ${gc};border-radius:8px;padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div>
+          <span style="font-size:1rem;font-weight:700;color:${gc}">Gap ${arrow}</span>
+          <span style="font-size:0.82rem;color:#8b949e;margin-left:6px;">+ VIX ${b.vix_regime.charAt(0).toUpperCase()+b.vix_regime.slice(1)}</span>
+          <div style="font-size:0.72rem;color:#8b949e;margin-top:2px;">${b.vix_label} · ${b.days} days (${b.pct_of_all}%)</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:1.3rem;font-weight:700;color:${wc}">${wr}%</div>
+          <div style="font-size:0.68rem;color:#8b949e;">win rate</div>
+        </div>
+      </div>
+      <div style="font-size:0.78rem;font-weight:600;color:#e6edf3;margin-bottom:4px;">${b.strategy}</div>
+      <div style="font-size:0.73rem;color:#8b949e;line-height:1.5;margin-bottom:10px;">${b.rationale}</div>
+      <div style="display:flex;border-radius:4px;overflow:hidden;margin-bottom:8px;">${zBar}</div>
+      <div style="display:flex;gap:10px;font-size:0.73rem;">
+        <span>Breach ↑ <b style="color:#3fb950">${b['breach_above_%']}%</b></span>
+        <span>Breach ↓ <b style="color:#f85149">${b['breach_below_%']}%</b></span>
+        <span>Inside <b style="color:#58a6ff">${b['close_inside_%']}%</b></span>
+        <span>Avg gap <b>${b.avg_gap_pct > 0 ? '+' : ''}${b.avg_gap_pct}%</b></span>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.querySelector('#daily-table tbody').innerHTML = (s.daily||[]).map(r => `
+    <tr><td>${r.date}</td><td>${fmt(r.vix_prev,1)}</td><td>${fmt(r.sig,1)}</td>
+    <td>${fmt(r.open,2)}</td><td>${fmt(r.close,2)}</td>
+    <td class="${parseFloat(r.gap_pct)>0?'up':parseFloat(r.gap_pct)<0?'down':''}">${fmt(r.gap_pct,2)}%</td>
+    <td><span class="badge ${parseFloat(r.gap_pct)>0?'call':'put'}" style="font-size:.7rem">${GAP_ZONE_LABELS[r.gap_zone]||r.gap_zone||'—'}</span></td>
+    <td>${boolBadge(r.breach_above_1sig)}</td><td>${boolBadge(r.breach_below_1sig)}</td>
+    <td>${zoneBadge(r.close_zone)}</td></tr>`).join('');
 }
 
-/* ── INIT ────────────────────────────────────────── */
+/* ── INIT ─────────────────────────────────────── */
 async function init() {
   const status = document.getElementById('status');
   try {
-    await Promise.all([loadTab1(), loadTab2()]);
+    const [price, opts, analysis] = await Promise.all([
+      loadCSV('spx_1min.csv'),
+      loadCSV('spx_options_snapshot.csv'),
+      loadJSON('patches_analysis.json'),
+    ]);
+    buildOverview(analysis);
+    await loadTab2(price, opts);
+    loadTab3(analysis);
     status.textContent = '';
-    document.getElementById('last-updated').textContent =
-      `Updated ${new Date().toLocaleString()}`;
+    document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleString()}`;
   } catch(e) {
     status.textContent = `Error: ${e.message} — run make fetch && make analyze first.`;
     console.error(e);

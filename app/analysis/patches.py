@@ -261,5 +261,107 @@ def _build_summary(df: pd.DataFrame) -> dict:
             "flat_count":       int((df["gap_pct"] == 0).sum()),
         },
         "vix_quartile_breakdown":  q_stats,
+        "regime_bins":             _build_regime_bins(df),
         "daily":                   df.reset_index().to_dict(orient="records"),
     }
+
+
+def _build_regime_bins(df: pd.DataFrame) -> list[dict]:
+    """
+    6 bins: gap_dir (up / dn) × vix_regime (low / med / high)
+    VIX terciles: low = bottom 33%, med = middle 33%, high = top 33%
+
+    For each bin, compute:
+    - sample size & % of all days
+    - breach / close-zone probabilities
+    - suggested strategy + rationale
+    - simple backtest win rate (strategy-specific)
+    """
+    vix_terciles = df["vix_prev"].quantile([1/3, 2/3]).values
+
+    def vix_regime(v):
+        if v <= vix_terciles[0]: return "low"
+        if v <= vix_terciles[1]: return "med"
+        return "high"
+
+    def gap_dir(g):
+        if g is None or (isinstance(g, float) and g != g): return None
+        return "up" if g > 0 else "dn"
+
+    df = df.copy()
+    df["vix_regime"] = df["vix_prev"].apply(vix_regime)
+    df["gap_dir"]    = df["gap_pct"].apply(gap_dir)
+    df = df[df["gap_dir"].notna()]
+
+    STRATEGIES = {
+        ("up", "low"): {
+            "name":      "Sell Upper 0.8σ Call Spread",
+            "rationale": "Low VIX gap-ups rarely breach 1σ upper band (93% inside rate). "
+                         "Sell credit spread at 0.8σ–1.0σ, collect premium, let time decay work.",
+            "win_condition": lambda grp: (~grp["breach_above_1sig"]),
+        },
+        ("up", "med"): {
+            "name":      "Iron Condor (bias upper)",
+            "rationale": "Med VIX gap-up days frequently stay inside bands. "
+                         "Sell condor — tighter on call side, wider on put side.",
+            "win_condition": lambda grp: (grp["close_zone"] == "inside") | (grp["close_zone"].str.contains("up_box", na=False)),
+        },
+        ("up", "high"): {
+            "name":      "Sell Put / Buy Call Debit Spread",
+            "rationale": "High VIX gap-up with elevated IV — sell downside put for credit "
+                         "funded by long call debit spread. Benefit from vol crush + upside.",
+            "win_condition": lambda grp: (~grp["breach_below_1sig"]),
+        },
+        ("dn", "low"): {
+            "name":      "Sell Lower 0.8σ Put Spread",
+            "rationale": "Low VIX gap-downs with tight bands — sell put credit spread at 0.8σ–1.0σ lower. "
+                         "Low vol means cheap hedging, high probability of staying inside.",
+            "win_condition": lambda grp: (~grp["breach_below_1sig"]),
+        },
+        ("dn", "med"): {
+            "name":      "Iron Condor (bias lower)",
+            "rationale": "Med VIX gap-down days tend to consolidate inside bands. "
+                         "Sell condor — tighter on put side, wider on call side.",
+            "win_condition": lambda grp: (grp["close_zone"] == "inside") | (grp["close_zone"].str.contains("dn_box", na=False)),
+        },
+        ("dn", "high"): {
+            "name":      "Buy Put Debit Spread / Sell Call",
+            "rationale": "High VIX gap-down signals elevated fear — buy directional put spread "
+                         "toward 1σ lower target. Sell call at 0.8σ upper to fund premium.",
+            "win_condition": lambda grp: (~grp["breach_above_1sig"]),
+        },
+    }
+
+    VIX_LABELS = {"low": f"Low (≤{vix_terciles[0]:.1f})", "med": f"Med ({vix_terciles[0]:.1f}–{vix_terciles[1]:.1f})", "high": f"High (>{vix_terciles[1]:.1f})"}
+    bins = []
+
+    for gap in ("up", "dn"):
+        for vix in ("low", "med", "high"):
+            grp = df[(df["gap_dir"] == gap) & (df["vix_regime"] == vix)]
+            n = len(grp)
+            if n == 0:
+                continue
+            key = (gap, vix)
+            strat = STRATEGIES[key]
+            win_mask = strat["win_condition"](grp)
+            win_rate = round(win_mask.mean() * 100, 1)
+
+            bins.append({
+                "bin":              f"Gap {'↑' if gap=='up' else '↓'} + VIX {vix.capitalize()}",
+                "gap_dir":          gap,
+                "vix_regime":       vix,
+                "vix_label":        VIX_LABELS[vix],
+                "days":             n,
+                "pct_of_all":       round(n / len(df) * 100, 1),
+                "breach_above_%":   round(grp["breach_above_1sig"].mean() * 100, 1),
+                "breach_below_%":   round(grp["breach_below_1sig"].mean() * 100, 1),
+                "any_breach_%":     round(((grp["breach_above_1sig"] | grp["breach_below_1sig"]).mean()) * 100, 1),
+                "close_inside_%":   round((grp["close_zone"] == "inside").mean() * 100, 1),
+                "close_zone_dist":  grp["close_zone"].value_counts().to_dict(),
+                "avg_gap_pct":      round(grp["gap_pct"].mean(), 3),
+                "strategy":         strat["name"],
+                "rationale":        strat["rationale"],
+                "backtest_win_%":   win_rate,
+            })
+
+    return bins

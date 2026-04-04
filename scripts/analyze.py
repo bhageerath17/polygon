@@ -20,10 +20,19 @@ def main() -> None:
     # Save CSV
     save_csv(daily_df, settings.analysis_csv)
 
-    # Save JSON
+    # Save JSON — sanitise NaN/Inf to null so output is valid JSON
+    def _clean(obj):
+        if isinstance(obj, float) and (obj != obj or obj in (float('inf'), float('-inf'))):
+            return None
+        if isinstance(obj, dict):
+            return {k: _clean(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_clean(v) for v in obj]
+        return obj
+
     settings.analysis_json.parent.mkdir(parents=True, exist_ok=True)
     with open(settings.analysis_json, "w") as f:
-        json.dump(summary, f, indent=2, default=str)
+        json.dump(_clean(summary), f, indent=2, default=str)
     print(f"Saved analysis JSON → {settings.analysis_json}")
 
     # Print summary
