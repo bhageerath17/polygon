@@ -29,6 +29,10 @@ class Settings:
     # Analysis
     lookback_mins: int
     sig_levels: list
+    # Reversals
+    reversal_window: int
+    squeeze_lookback: int
+    strike_rounding: int
     # Paths
     data_dir: Path
     price_csv: Path
@@ -36,6 +40,8 @@ class Settings:
     vix_csv: Path
     analysis_csv: Path
     analysis_json: Path
+    reversal_csv: Path
+    reversal_json: Path
 
 
 settings = Settings(
@@ -50,10 +56,15 @@ settings = Settings(
     vix_end_date=_cfg["vix"]["end_date"],
     lookback_mins=_cfg["analysis"]["lookback_mins"],
     sig_levels=_cfg["analysis"]["sig_levels"],
+    reversal_window=_cfg["reversals"]["rolling_window_mins"],
+    squeeze_lookback=_cfg["reversals"]["squeeze_lookback"],
+    strike_rounding=_cfg["reversals"]["strike_rounding"],
     data_dir=_ROOT / _cfg["paths"]["data_dir"],
     price_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["price_csv"],
     options_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["options_csv"],
     vix_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["vix_csv"],
     analysis_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_csv"],
     analysis_json=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_json"],
+    reversal_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["reversal_csv"],
+    reversal_json=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["reversal_json"],
 )

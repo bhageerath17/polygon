@@ -4,6 +4,27 @@ from app.client import client
 from app.config import settings
 
 
+def get_option_1min(option_ticker: str, date: str) -> pd.DataFrame:
+    """Fetch 1-minute OHLCV bars for a single options contract on a given date.
+
+    Args:
+        option_ticker: e.g. "O:SPX260102C06875000"
+        date: "YYYY-MM-DD"
+    """
+    url = (
+        f"{settings.base_url}/v2/aggs/ticker/{option_ticker}"
+        f"/range/1/minute/{date}/{date}"
+    )
+    results = client.get_paginated(url, {"adjusted": "true", "sort": "asc", "limit": 50000})
+    if not results:
+        return pd.DataFrame()
+    df = pd.DataFrame(results)
+    df["datetime"] = pd.to_datetime(df["t"], unit="ms", utc=True).dt.tz_convert("America/New_York")
+    df = df.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
+    keep = [c for c in ["datetime", "open", "high", "low", "close", "volume"] if c in df.columns]
+    return df[keep].set_index("datetime")
+
+
 def get_spx_options_snapshot(limit: int | None = None) -> tuple[list[dict], dict]:
     """Fetch the latest options snapshot for SPX."""
     url = f"{settings.base_url}/v3/snapshot/options/{settings.ticker}"

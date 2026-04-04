@@ -86,8 +86,9 @@
   <h1>SPX 0DTE EM Dashboard</h1>
   <div class="tabs" style="border:none;padding:0;background:none;">
     <button class="tab-btn active" onclick="switchTab('tab-overview',  this)">Overview</button>
-    <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
     <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
+    <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
+    <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
   </div>
   <span id="last-updated"></span>
 </header>
@@ -185,7 +186,75 @@
 </div>
 
 <!-- ════════════════════════════════════════════════
-     TAB 2 — PRICE SUMMARY
+     TAB 3 — REVERSAL ANALYSIS
+════════════════════════════════════════════════ -->
+<div id="tab-reversals" class="tab-panel">
+
+  <div class="grid" id="reversal-cards"></div>
+
+  <div class="two-col" style="padding-top:8px;">
+    <div class="panel" id="fall-panel"><h3>Fall Magnitude</h3></div>
+    <div class="panel" id="reversal-panel"><h3>Reversal Magnitude</h3></div>
+  </div>
+
+  <section>
+    <h2>Squeeze Strength Breakdown</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
+      ATM 0DTE call candle body compression detected in the 20 bars before each swing low.
+      <span id="options-data-note" style="color:#e3b341;"></span>
+    </p>
+    <div class="tbl-wrap">
+      <table id="squeeze-table">
+        <thead><tr>
+          <th>Squeeze</th><th>Count</th><th>Avg Fall</th><th>Avg Reversal</th>
+          <th>% Strong Reversal</th><th>Avg Expansion Body</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="two-col">
+    <div class="panel" id="dow-panel"><h3>Day of Week Distribution</h3></div>
+    <div class="panel" id="tod-panel"><h3>Time of Day (Hour of Low)</h3></div>
+  </div>
+
+  <section>
+    <h2>VIX Regime Breakdown</h2>
+    <div class="tbl-wrap">
+      <table id="vix-reversal-table">
+        <thead><tr>
+          <th>VIX Regime</th><th>Range</th><th>Count</th>
+          <th>Avg Fall</th><th>Avg Reversal</th><th>% Squeeze</th><th>% Strong Rev.</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Fall × Reversal Cross-Tab</h2>
+    <div class="tbl-wrap" id="crosstab-wrap"></div>
+  </section>
+
+  <section>
+    <h2>All Reversal Events</h2>
+    <div class="tbl-wrap">
+      <table id="reversal-events-table">
+        <thead><tr>
+          <th>Date</th><th>Day</th><th>Low Time</th><th>Swing High</th><th>Swing Low</th>
+          <th>Fall</th><th>Reversal</th><th>Fall Cat.</th><th>Rev. Cat.</th>
+          <th>VIX</th><th>Squeeze</th><th>Duration</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- ════════════════════════════════════════════════
+     TAB 4 — PRICE SUMMARY
 ════════════════════════════════════════════════ -->
 <div id="tab-price" class="tab-panel">
   <div class="grid" id="summary-cards"></div>
@@ -502,18 +571,154 @@ function loadTab3(s) {
     <td>${zoneBadge(r.close_zone)}</td></tr>`).join('');
 }
 
+/* ── TAB 3 — REVERSAL ANALYSIS ────────────────── */
+const FALL_COLORS = { small:'#e3b341', medium:'#ff8a65', large:'#f85149' };
+const REV_COLORS  = { weak:'#8b949e',  medium:'#58a6ff', strong:'#3fb950' };
+const SQ_COLORS   = { strong:'#3fb950', moderate:'#56d364', mild:'#e3b341', none:'#8b949e', no_data:'#21262d' };
+
+function loadTab3Reversals(r) {
+  if (!r || r.total_events === 0) {
+    document.getElementById('reversal-cards').innerHTML =
+      '<div class="card" style="grid-column:1/-1"><div class="value neutral">No reversal events found</div></div>';
+    return;
+  }
+
+  const noOptions = r.squeeze_strength_counts && r.squeeze_strength_counts['no_data'] === r.total_events;
+  if (noOptions) {
+    document.getElementById('options-data-note').textContent =
+      ' ⚠ ATM options 1-min data unavailable — requires Polygon paid plan. Squeeze analysis pending.';
+  }
+
+  // Cards
+  document.getElementById('reversal-cards').innerHTML = [
+    { label:'Total Reversals',    value: r.total_events,           sub: r.date_range,                              cls:'neutral' },
+    { label:'Avg Fall',           value: r.avg_fall_pts + ' pts',  sub:`Median ${r.median_fall_pts} pts`,          cls:'down'    },
+    { label:'Avg Reversal',       value: r.avg_reversal_pts + ' pts', sub:`Median ${r.median_reversal_pts} pts`,   cls:'up'      },
+    { label:'Small Falls (30-50)',value: r.fall_category_counts?.small  || 0, sub:'pts drawdown',                  cls:'warn-z'  },
+    { label:'Medium Falls (50-80)',value: r.fall_category_counts?.medium || 0, sub:'pts drawdown',                 cls:'neutral' },
+    { label:'Large Falls (80+)',  value: r.fall_category_counts?.large  || 0, sub:'pts drawdown',                  cls:'down'    },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div>
+    <div class="value ${c.cls||''}">${c.value}</div><div class="sub">${c.sub}</div></div>`).join('');
+
+  // Fall panel
+  const fc = r.fall_category_counts || {};
+  document.getElementById('fall-panel').innerHTML = `<h3>Fall Magnitude</h3>` +
+    Object.entries(fc).map(([k,v]) => `
+    <div class="stat-row">
+      <span class="stat-label" style="display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${FALL_COLORS[k]||'#8b949e'};display:inline-block"></span>
+        ${k.charAt(0).toUpperCase()+k.slice(1)}
+      </span>
+      <span class="stat-val">${v} days (${(v/r.total_events*100).toFixed(0)}%)</span>
+    </div>`).join('');
+
+  // Reversal panel
+  const rc = r.reversal_category_counts || {};
+  document.getElementById('reversal-panel').innerHTML = `<h3>Reversal Magnitude</h3>` +
+    Object.entries(rc).map(([k,v]) => `
+    <div class="stat-row">
+      <span class="stat-label" style="display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${REV_COLORS[k]||'#8b949e'};display:inline-block"></span>
+        ${k.charAt(0).toUpperCase()+k.slice(1)}
+      </span>
+      <span class="stat-val">${v} days (${(v/r.total_events*100).toFixed(0)}%)</span>
+    </div>`).join('');
+
+  // Squeeze table
+  document.querySelector('#squeeze-table tbody').innerHTML = (r.squeeze_breakdown||[]).map(s => `
+    <tr>
+      <td><span class="badge" style="background:${SQ_COLORS[s.squeeze_strength]||'#8b949e'}22;color:${SQ_COLORS[s.squeeze_strength]||'#8b949e'}">${s.squeeze_strength}</span></td>
+      <td>${s.count}</td>
+      <td>${s.avg_fall_pts} pts</td>
+      <td>${s.avg_reversal_pts} pts</td>
+      <td>${pct(s.pct_strong_reversal)}</td>
+      <td>${s.avg_expansion_body != null ? '$'+s.avg_expansion_body : '—'}</td>
+    </tr>`).join('');
+
+  // Day of week
+  const dow = r.day_of_week_distribution || {};
+  const dowOrder = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  document.getElementById('dow-panel').innerHTML = `<h3>Day of Week Distribution</h3>` +
+    dowOrder.map(d => {
+      const v = dow[d] || 0;
+      const w = r.total_events ? (v/r.total_events*100).toFixed(0) : 0;
+      return `<div class="stat-row">
+        <span class="stat-label">${d.slice(0,3)}</span>
+        <span class="stat-val" style="display:flex;align-items:center;gap:8px;">
+          <span style="display:inline-block;height:8px;width:${w*2}px;background:#1f6feb;border-radius:2px"></span>
+          ${v}
+        </span></div>`;
+    }).join('');
+
+  // Time of day
+  const tod = r.time_of_day_distribution || {};
+  document.getElementById('tod-panel').innerHTML = `<h3>Time of Low (Hour ET)</h3>` +
+    Object.entries(tod).sort((a,b)=>parseInt(a[0])-parseInt(b[0])).map(([h,v]) => {
+      const label = `${h.padStart(2,'0')}:00`;
+      const w = r.total_events ? (v/r.total_events*100).toFixed(0) : 0;
+      return `<div class="stat-row">
+        <span class="stat-label">${label}</span>
+        <span class="stat-val" style="display:flex;align-items:center;gap:8px;">
+          <span style="display:inline-block;height:8px;width:${w*2}px;background:#388bfd;border-radius:2px"></span>
+          ${v}
+        </span></div>`;
+    }).join('');
+
+  // VIX regime table
+  document.querySelector('#vix-reversal-table tbody').innerHTML = (r.vix_regime_breakdown||[]).map(v => `
+    <tr>
+      <td><b>${v.regime}</b></td><td>${v.vix_range}</td><td>${v.count}</td>
+      <td>${v.avg_fall_pts} pts</td><td>${v.avg_reversal_pts} pts</td>
+      <td>${pct(v.pct_with_squeeze)}</td><td>${pct(v.pct_strong_reversal)}</td>
+    </tr>`).join('');
+
+  // Cross-tab
+  const ct = r.fall_reversal_crosstab || {};
+  const revCats = ['weak','medium','strong'];
+  const fallCats = ['small','medium','large'];
+  document.getElementById('crosstab-wrap').innerHTML = `
+    <table><thead><tr>
+      <th>Fall \\ Reversal</th>
+      ${revCats.map(c=>`<th style="color:${REV_COLORS[c]}">${c}</th>`).join('')}
+    </tr></thead><tbody>
+    ${fallCats.map(f=>`<tr>
+      <td style="color:${FALL_COLORS[f]};font-weight:600">${f}</td>
+      ${revCats.map(rv=>`<td>${(ct[rv]&&ct[rv][f])||0}</td>`).join('')}
+    </tr>`).join('')}
+    </tbody></table>`;
+
+  // Events table
+  document.querySelector('#reversal-events-table tbody').innerHTML = (r.events||[]).map(e => `
+    <tr>
+      <td>${e.date}</td>
+      <td style="color:#8b949e">${e.day_of_week?.slice(0,3)}</td>
+      <td>${e.time_of_low}</td>
+      <td>${fmt(e.swing_high,1)}</td>
+      <td>${fmt(e.swing_low,1)}</td>
+      <td class="down">${fmt(e.fall_pts,1)}</td>
+      <td class="up">${fmt(e.reversal_pts,1)}</td>
+      <td><span class="badge" style="background:${FALL_COLORS[e.fall_category]||'#8b949e'}22;color:${FALL_COLORS[e.fall_category]||'#8b949e'}">${e.fall_category}</span></td>
+      <td><span class="badge" style="background:${REV_COLORS[e.reversal_category]||'#8b949e'}22;color:${REV_COLORS[e.reversal_category]||'#8b949e'}">${e.reversal_category}</span></td>
+      <td>${fmt(e.vix_prev,1)}</td>
+      <td><span class="badge" style="background:${SQ_COLORS[e.squeeze_strength]||'#8b949e'}22;color:${SQ_COLORS[e.squeeze_strength]||'#8b949e'}">${e.squeeze_strength}</span></td>
+      <td>${e.squeeze_duration||0}m</td>
+    </tr>`).join('');
+}
+
 /* ── INIT ─────────────────────────────────────── */
 async function init() {
   const status = document.getElementById('status');
   try {
-    const [price, opts, analysis] = await Promise.all([
+    const [price, opts, analysis, reversals] = await Promise.all([
       loadCSV('spx_1min.csv'),
       loadCSV('spx_options_snapshot.csv'),
       loadJSON('patches_analysis.json'),
+      loadJSON('reversal_analysis.json').catch(() => ({ total_events: 0 })),
     ]);
     buildOverview(analysis);
     await loadTab2(price, opts);
     loadTab3(analysis);
+    loadTab3Reversals(reversals);
     status.textContent = '';
     document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleString()}`;
   } catch(e) {

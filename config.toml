@@ -16,6 +16,11 @@ end_date   = "2026-04-03"
 lookback_mins = 5            # bars used to build patch boxes (9:31–9:35)
 sig_levels    = [1.0, 0.8]   # sigma multipliers for bands
 
+[reversals]
+rolling_window_mins = 30
+squeeze_lookback    = 20
+strike_rounding     = 25
+
 [paths]
 data_dir      = "data"
 price_csv     = "spx_1min.csv"
@@ -23,3 +28,5 @@ options_csv   = "spx_options_snapshot.csv"
 vix_csv       = "vix_daily.csv"
 analysis_csv  = "patches_analysis.csv"
 analysis_json = "patches_analysis.json"
+reversal_csv  = "reversal_analysis.csv"
+reversal_json = "reversal_analysis.json"

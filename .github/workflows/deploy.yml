@@ -43,11 +43,17 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/analyze.py
 
+      - name: Run reversal analysis
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: PYTHONPATH=. uv run python scripts/reversal_analysis.py
+
       - name: Copy data into dashboard
         run: |
           cp data/spx_1min.csv dashboard/
           cp data/spx_options_snapshot.csv dashboard/
           cp data/patches_analysis.json dashboard/
+          cp data/reversal_analysis.json dashboard/
 
       - uses: actions/configure-pages@v5
 
