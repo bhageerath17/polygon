@@ -49,6 +49,8 @@ jobs:
         run: PYTHONPATH=. uv run python scripts/reversal_analysis.py
 
       - name: Build prediction model
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/build_model.py
 
       - name: Copy data into dashboard
