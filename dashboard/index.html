@@ -90,6 +90,7 @@
     <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
     <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
     <button class="tab-btn"        onclick="switchTab('tab-model',     this)">Prediction Model</button>
+    <button class="tab-btn"        onclick="switchTab('tab-model2',    this)">Prediction Model 2</button>
     <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
   </div>
   <span id="last-updated"></span>
@@ -314,7 +315,60 @@
 </div>
 
 <!-- ════════════════════════════════════════════════
-     TAB 5 — PRICE SUMMARY
+     TAB 5 — PREDICTION MODEL 2
+════════════════════════════════════════════════ -->
+<div id="tab-model2" class="tab-panel">
+
+  <!-- Summary cards -->
+  <div class="grid" id="model2-cards"></div>
+
+  <!-- VIX Regime + Fold Precision side by side -->
+  <div class="two-col" style="padding-top:8px;">
+    <div class="panel"><h3>VIX Regime Performance</h3><div id="model2-vix-regime-chart" style="width:100%;height:280px;"></div></div>
+    <div class="panel"><h3>Fold Precision Distribution</h3><div id="model2-fold-chart" style="width:100%;height:280px;"></div></div>
+  </div>
+
+  <!-- Confusion matrix + feature importance side by side -->
+  <div class="two-col">
+    <div class="panel" id="model2-confusion-panel"><h3>Confusion Matrix</h3></div>
+    <div class="panel" id="model2-feature-panel"><h3>Feature Importance</h3></div>
+  </div>
+
+  <!-- SPX 1-min candle chart with model2 predictions -->
+  <section>
+    <h2>SPX 1-Min Candles — Last 7 Trading Days · Model 2 Predictions</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
+      1-minute SPX candles · prediction marker pinned to the <b style="color:#e6edf3">exact swing-low candle</b>.
+      &nbsp;<span style="color:#3fb950">&#9650; Hit</span> — predicted reversal &amp; it reversed &nbsp;|&nbsp;
+      <span style="color:#f85149">&#9660; Miss</span> — predicted reversal, didn't reverse &nbsp;|&nbsp;
+      <span style="color:#e3b341">&#9670;</span> Predicted weak (no call made) &nbsp;·&nbsp;
+      Marker size proportional to model probability.
+    </p>
+    <div id="spx-plotly-chart2" style="width:100%;height:480px;"></div>
+  </section>
+
+  <!-- Per-event prediction table -->
+  <section>
+    <h2>Per-Event Predictions (Model 2)</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
+      Target = triple-barrier label (PT hit within 60 bars). Probabilities are out-of-sample with Platt calibration.
+    </p>
+    <div class="tbl-wrap">
+      <table id="model2-events-table">
+        <thead><tr>
+          <th>Date</th><th>Low Time</th><th>Fall</th><th>Reversal</th>
+          <th>Rev. Cat.</th><th>Squeeze</th><th>VIX</th>
+          <th>Pred Prob</th><th>Prediction</th><th>Actual</th><th>Result</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- ════════════════════════════════════════════════
+     TAB 6 — PRICE SUMMARY
 ════════════════════════════════════════════════ -->
 <div id="tab-price" class="tab-panel">
   <div class="grid" id="summary-cards"></div>
@@ -393,6 +447,8 @@
 <script>
 let _spxPriceCache = null;
 let _modelCache    = null;
+let _model2Cache   = null;
+let _model2Loaded  = false;
 
 function switchTab(id, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -408,6 +464,16 @@ function switchTab(id, btn) {
       } else if (_spxPriceCache && _modelCache) {
         drawSPXPlotly(_spxPriceCache, _modelCache.event_predictions || []);
       }
+    }
+  }
+  if (id === 'tab-model2') {
+    if (!_model2Loaded && _spxPriceCache) {
+      loadModel2Data(_spxPriceCache);
+    } else {
+      ['spx-plotly-chart2','model2-vix-regime-chart','model2-fold-chart'].forEach(eid => {
+        const el2 = document.getElementById(eid);
+        if (el2 && el2.data && el2.data.length) Plotly.Plots.resize(el2);
+      });
     }
   }
 }
@@ -1208,6 +1274,322 @@ function drawSPXPlotly(spxPrice, eventPredictions) {
     el.appendChild(hint);
     setTimeout(() => hint.remove(), 6000);
   }
+}
+
+/* ── TAB 5 — PREDICTION MODEL 2 ──────────────── */
+async function loadModel2Data(spxPrice) {
+  try {
+    const m = await loadJSON('model2_results.json');
+    _model2Cache = m;
+    _model2Loaded = true;
+    loadModel2Tab(m, spxPrice);
+  } catch(e) {
+    document.getElementById('model2-cards').innerHTML =
+      '<div class="card" style="grid-column:1/-1"><div class="value neutral">Model 2 data unavailable. Run scripts/build_model2.py first.</div></div>';
+    _model2Loaded = true;
+  }
+}
+
+function loadModel2Tab(m, spxPrice) {
+  if (!m || m.error) {
+    document.getElementById('model2-cards').innerHTML =
+      `<div class="card" style="grid-column:1/-1"><div class="value neutral">${m?.error || 'Model 2 data unavailable'}</div></div>`;
+    return;
+  }
+
+  const cm = m.confusion_matrix || {};
+  const pre = (m.precision * 100).toFixed(1);
+  const rec = (m.recall * 100).toFixed(1);
+  const br  = (m.base_rate * 100).toFixed(1);
+  const fs  = ((m.feature_stability_score || 0) * 100).toFixed(1);
+  const labelDisp = m.label_method === 'triple_barrier' ? `Triple Barrier k=${m.k_barrier}` : 'Fixed Threshold (fallback)';
+
+  // Cards
+  document.getElementById('model2-cards').innerHTML = [
+    { label:'Precision',              value: pre + '%',              sub:'of predicted significant',  cls: parseFloat(pre) >= 70 ? 'up' : 'neutral' },
+    { label:'Recall',                 value: rec + '%',              sub:'of actual significant',     cls: parseFloat(rec) >= 50 ? 'up' : 'neutral' },
+    { label:'Threshold',              value: m.optimal_threshold,    sub:'precision-maximised',       cls:'neutral' },
+    { label:'Events',                 value: m.n_events,             sub:`${m.n_significant_reversals} positive (${br}%)`, cls:'neutral' },
+    { label:'Label Method',           value: labelDisp,              sub:'vol-scaled barriers',       cls:'up' },
+    { label:'Feature Stability',      value: fs + '%',               sub:'top-10 fold overlap',       cls: parseFloat(fs) >= 50 ? 'up' : 'neutral' },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div>
+    <div class="value ${c.cls||''}">${c.value}</div><div class="sub">${c.sub}</div></div>`).join('');
+
+  // Confusion matrix
+  const tp=cm.tp||0, fp=cm.fp||0, tn=cm.tn||0, fn=cm.fn||0;
+  document.getElementById('model2-confusion-panel').innerHTML = `<h3>Confusion Matrix</h3>
+    <p style="font-size:0.72rem;color:#8b949e;margin-bottom:12px;">
+      Predicted rows x Actual columns. Target = triple-barrier PT hit.
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem;text-align:center;">
+      <thead><tr>
+        <th style="text-align:left;padding:6px;color:#8b949e"></th>
+        <th style="padding:6px;color:#3fb950">Act. Significant</th>
+        <th style="padding:6px;color:#f85149">Act. Weak</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td style="text-align:left;padding:6px;color:#8b949e;font-size:0.78rem">Pred. Significant</td>
+          <td style="padding:6px;background:#0d332133;color:#3fb950;font-weight:700;font-size:1.1rem">${tp}</td>
+          <td style="padding:6px;background:#3b0f0f33;color:#f85149;font-weight:700;font-size:1.1rem">${fp}</td>
+        </tr>
+        <tr>
+          <td style="text-align:left;padding:6px;color:#8b949e;font-size:0.78rem">Pred. Weak</td>
+          <td style="padding:6px;background:#3b0f0f33;color:#f85149;font-weight:700;font-size:1.1rem">${fn}</td>
+          <td style="padding:6px;background:#0d332133;color:#3fb950;font-weight:700;font-size:1.1rem">${tn}</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+  // Feature importance
+  const fi = m.feature_importance || [];
+  const _val = f => Math.abs(f.importance ?? f.coefficient ?? 0);
+  const maxCoef = Math.max(...fi.map(_val), 0.0001);
+  document.getElementById('model2-feature-panel').innerHTML = `<h3>Feature Importance</h3>` +
+    fi.slice(0, 20).map(f => {
+      const val = _val(f);
+      const w   = (val / maxCoef * 100).toFixed(1);
+      const col = '#58a6ff';
+      return `<div class="stat-row" style="align-items:center;">
+        <span class="stat-label" style="min-width:160px;font-size:0.78rem">${f.feature}</span>
+        <span style="flex:1;display:flex;align-items:center;gap:6px;">
+          <span style="display:inline-block;height:10px;width:${w}%;background:${col};border-radius:2px;transition:width .3s"></span>
+        </span>
+        <span class="stat-val" style="color:${col};margin-left:6px;font-size:0.78rem">${val.toFixed(3)}</span>
+      </div>`;
+    }).join('');
+
+  // VIX Regime chart (Plotly horizontal bar)
+  const vrp = m.vix_regime_performance || {};
+  const regimeNames = ['low','mid','high'];
+  const regimePrec = regimeNames.map(r => (vrp[r]?.precision || 0) * 100);
+  const regimeRec  = regimeNames.map(r => (vrp[r]?.recall || 0) * 100);
+  const regimeN    = regimeNames.map(r => vrp[r]?.n || 0);
+  const regimeLabels = regimeNames.map((r,i) => `${r.charAt(0).toUpperCase()+r.slice(1)} (n=${regimeN[i]})`);
+
+  if (typeof Plotly !== 'undefined') {
+    Plotly.newPlot('model2-vix-regime-chart', [
+      { type:'bar', y:regimeLabels, x:regimePrec, name:'Precision', orientation:'h',
+        marker:{color:'#3fb950'}, text:regimePrec.map(v=>v.toFixed(1)+'%'), textposition:'auto' },
+      { type:'bar', y:regimeLabels, x:regimeRec, name:'Recall', orientation:'h',
+        marker:{color:'#58a6ff'}, text:regimeRec.map(v=>v.toFixed(1)+'%'), textposition:'auto' },
+    ], {
+      barmode:'group', paper_bgcolor:'#161b22', plot_bgcolor:'#161b22',
+      font:{color:'#e6edf3',size:11}, margin:{l:100,r:20,t:10,b:30},
+      xaxis:{title:'%',gridcolor:'#21262d',range:[0,110]},
+      yaxis:{autorange:'reversed'},
+      legend:{x:0.7,y:1.1,orientation:'h',font:{size:10}},
+    }, {responsive:true, displayModeBar:false});
+  }
+
+  // Fold precision distribution chart
+  const foldDist = m.fold_precision_distribution || [];
+  if (foldDist.length > 0 && typeof Plotly !== 'undefined') {
+    const foldLabels = foldDist.map((_,i) => `Fold ${i+1}`);
+    const foldVals   = foldDist.map(v => (v*100));
+    const meanPrec   = foldVals.reduce((a,b)=>a+b,0) / foldVals.length;
+    Plotly.newPlot('model2-fold-chart', [
+      { type:'bar', x:foldLabels, y:foldVals, name:'Precision',
+        marker:{color:foldVals.map(v=>v>=meanPrec?'#3fb950':'#e3b341')},
+        text:foldVals.map(v=>v.toFixed(1)+'%'), textposition:'auto' },
+      { type:'scatter', x:foldLabels, y:foldLabels.map(()=>meanPrec), name:`Mean (${meanPrec.toFixed(1)}%)`,
+        mode:'lines', line:{color:'#f85149',dash:'dash',width:2} },
+    ], {
+      paper_bgcolor:'#161b22', plot_bgcolor:'#161b22',
+      font:{color:'#e6edf3',size:11}, margin:{l:50,r:20,t:10,b:40},
+      yaxis:{title:'Precision %',gridcolor:'#21262d',range:[0,110]},
+      legend:{x:0.6,y:1.1,orientation:'h',font:{size:10}},
+    }, {responsive:true, displayModeBar:false});
+  } else {
+    document.getElementById('model2-fold-chart').innerHTML =
+      '<p style="color:#8b949e;padding:20px;font-size:0.82rem;">Fold distribution not available (LOOCV mode).</p>';
+  }
+
+  // SPX candle chart with model2 predictions
+  drawSPXPlotly2(spxPrice, m.event_predictions || []);
+
+  // Events table
+  const evts = m.event_predictions || [];
+  document.querySelector('#model2-events-table tbody').innerHTML = evts.map(e => {
+    const prob    = (e.pred_prob_significant * 100).toFixed(1);
+    const hitCls  = e.hit ? '#3fb950' : '#f85149';
+    const hitIcon = e.hit ? '&#9650; Hit' : '&#9660; Miss';
+    const predTxt = e.pred_significant ? 'Significant' : 'Weak';
+    const actTxt  = e.actual_significant ? 'Significant' : 'Weak';
+    return `<tr>
+      <td>${e.date}</td>
+      <td>${e.time_of_low}</td>
+      <td class="down">${fmt(e.fall_pts,1)} pts</td>
+      <td class="up">${fmt(e.reversal_pts,1)} pts</td>
+      <td><span class="badge" style="background:${REV_COLORS[e.reversal_category]||'#8b949e'}22;color:${REV_COLORS[e.reversal_category]||'#8b949e'}">${e.reversal_category}</span></td>
+      <td><span class="badge" style="background:${SQ_COLORS[e.squeeze_strength]||'#8b949e'}22;color:${SQ_COLORS[e.squeeze_strength]||'#8b949e'}">${e.squeeze_strength}</span></td>
+      <td>${fmt(e.vix_prev,1)}</td>
+      <td><b style="color:${parseFloat(prob)>=60?'#3fb950':parseFloat(prob)>=45?'#e3b341':'#8b949e'}">${prob}%</b></td>
+      <td><span class="badge ${e.pred_significant?'call':'neutral-z'}">${predTxt}</span></td>
+      <td><span class="badge ${e.actual_significant?'call':'neutral-z'}">${actTxt}</span></td>
+      <td style="color:${hitCls};font-weight:600">${hitIcon}</td>
+    </tr>`;
+  }).join('');
+}
+
+function drawSPXPlotly2(spxPrice, eventPredictions) {
+  const el = document.getElementById('spx-plotly-chart2');
+  if (!el || typeof Plotly === 'undefined') return;
+
+  const allCandles = [];
+  spxPrice.forEach(r => {
+    const raw = r.datetime || r.date || '';
+    if (!raw) return;
+    const datePart = raw.slice(0, 10);
+    const timePart = raw.slice(11, 16);
+    if (!timePart || timePart.length < 5) return;
+    const [hh, mm] = timePart.split(':').map(Number);
+    const totalMin = hh * 60 + mm;
+    if (totalMin < 9 * 60 + 30 || totalMin >= 16 * 60) return;
+    const o = parseFloat(r.open), h = parseFloat(r.high);
+    const l = parseFloat(r.low),  c = parseFloat(r.close);
+    if (isNaN(o) || isNaN(c)) return;
+    allCandles.push({ t: `${datePart}T${timePart}`, date: datePart, o, h, l, c });
+  });
+  allCandles.sort((a, b) => (a.t < b.t ? -1 : 1));
+
+  const uniqueDays = [...new Set(allCandles.map(c => c.date))];
+  const last7days  = new Set(uniqueDays.slice(-7));
+  const candles    = allCandles.filter(c => last7days.has(c.date));
+
+  if (!candles.length) {
+    el.innerHTML = '<p style="color:#8b949e;padding:20px;">No 1-min price data for this window.</p>';
+    return;
+  }
+
+  const candleIdx = {};
+  candles.forEach((c, i) => { candleIdx[c.t] = i; });
+
+  const xs  = candles.map(c => c.t);
+  const ops = candles.map(c => c.o);
+  const his = candles.map(c => c.h);
+  const los = candles.map(c => c.l);
+  const cls2 = candles.map(c => c.c);
+
+  const shapes = [];
+  const markerX = [], markerY = [], markerColors = [], markerSizes = [];
+  const markerSymbols = [], hoverTexts = [];
+
+  eventPredictions.forEach(ev => {
+    if (!last7days.has(ev.date)) return;
+    const lowHHMM = (ev.time_of_low || '12:00:00').slice(0, 5);
+    const exactKey = `${ev.date}T${lowHHMM}`;
+
+    let candleKey = exactKey;
+    if (candleIdx[candleKey] === undefined) {
+      const [h2, m2] = lowHHMM.split(':').map(Number);
+      for (let delta = 1; delta <= 2; delta++) {
+        for (const sign of [-1, 1]) {
+          const adj  = m2 + sign * delta;
+          const adjH = h2 + Math.floor(adj / 60);
+          const adjM = ((adj % 60) + 60) % 60;
+          const k2   = `${ev.date}T${String(adjH).padStart(2,'0')}:${String(adjM).padStart(2,'0')}`;
+          if (candleIdx[k2] !== undefined) { candleKey = k2; break; }
+        }
+        if (candleIdx[candleKey] !== undefined) break;
+      }
+    }
+    if (candleIdx[candleKey] === undefined) return;
+
+    const candle = candles[candleIdx[candleKey]];
+    const prob   = ev.pred_prob_significant || 0;
+    const isSig  = ev.pred_significant;
+    const isHit  = ev.hit;
+
+    const color  = isSig ? (isHit ? '#3fb950' : '#f85149') : '#e3b341';
+    const symbol = isSig ? (isHit ? 'triangle-up' : 'triangle-down') : 'diamond';
+    const size   = 14 + prob * 18;
+
+    shapes.push({
+      type: 'rect', x0: candleKey, x1: candleKey,
+      y0: 0, y1: 1, yref: 'paper',
+      line: { color, width: 2 }, fillcolor: color + '22', layer: 'below',
+    });
+
+    markerX.push(candleKey);
+    markerY.push(candle.l - (candle.h - candle.l) * 0.4);
+    markerColors.push(color);
+    markerSizes.push(size);
+    markerSymbols.push(symbol);
+    hoverTexts.push(
+      `<b>${ev.date}  ${lowHHMM}</b><br>` +
+      `Model 2 prob: <b style="color:${color}">${(prob*100).toFixed(1)}%</b><br>` +
+      `Prediction: <b>${isSig ? 'REVERSAL' : 'Weak'}</b><br>` +
+      `Actual: <b>${ev.actual_significant ? 'REVERSAL' : 'Weak'}</b><br>` +
+      `Result: <b>${isHit ? 'Hit' : 'Miss'}</b><br>` +
+      `Fall: ${(+ev.fall_pts).toFixed(1)} pts<br>` +
+      `Recovery: ${(+ev.reversal_pts).toFixed(1)} pts  (${ev.reversal_category})`
+    );
+  });
+
+  const dayList = [...last7days].sort();
+  dayList.forEach(d => {
+    const key = `${d}T09:30`;
+    if (candleIdx[key] !== undefined) {
+      shapes.push({ type:'line', x0:key, x1:key, y0:0, y1:1, yref:'paper',
+        line:{color:'#30363d',width:1,dash:'dot'}, layer:'above' });
+    }
+  });
+
+  const annotations = dayList.map(d => ({
+    x: candleIdx[`${d}T09:35`] !== undefined ? `${d}T09:35` : `${d}T09:30`,
+    y: 1.03, yref: 'paper',
+    text: new Date(d + 'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}),
+    showarrow: false, font:{size:10,color:'#8b949e'}, xanchor:'left',
+  }));
+
+  const candleTrace = {
+    type:'candlestick', name:'SPX 1-min',
+    x:xs, open:ops, high:his, low:los, close:cls2,
+    increasing:{line:{color:'#26a641',width:1},fillcolor:'#26a641'},
+    decreasing:{line:{color:'#da3633',width:1},fillcolor:'#da3633'},
+    whiskerwidth:0.3,
+  };
+
+  const predTrace = {
+    type:'scatter', name:'Model 2 Predictions',
+    x:markerX, y:markerY, mode:'markers',
+    marker:{ symbol:markerSymbols, size:markerSizes, color:markerColors, opacity:0.95,
+      line:{width:1.5,color:markerColors} },
+    text:hoverTexts, hoverinfo:'text', showlegend:true,
+  };
+
+  const tickData = (() => {
+    const labels=[], vals=[];
+    let lastDate='';
+    candles.forEach(c => {
+      const hhmm = c.t.slice(11);
+      if (c.date !== lastDate) {
+        lastDate = c.date;
+        const d = new Date(c.date+'T12:00');
+        labels.push(`${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${hhmm}`);
+      } else { labels.push(hhmm); }
+      vals.push(c.t);
+    });
+    return {ticktext:labels, tickvals:vals};
+  })();
+
+  Plotly.newPlot(el, [candleTrace, predTrace], {
+    paper_bgcolor:'#0d1117', plot_bgcolor:'#0d1117',
+    font:{color:'#e6edf3',size:11,family:'-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif'},
+    xaxis:{ type:'category', rangeslider:{visible:false}, fixedrange:false, showgrid:true,
+      gridcolor:'#1e2530', tickfont:{size:9,color:'#8b949e'}, tickangle:-45, nticks:18,
+      showline:true, linecolor:'#30363d', zeroline:false,
+      tickvals:tickData.tickvals, ticktext:tickData.ticktext },
+    yaxis:{ fixedrange:false, showgrid:true, gridcolor:'#1e2530', tickfont:{size:10,color:'#8b949e'},
+      side:'right', showline:true, linecolor:'#30363d', zeroline:false, autorange:true },
+    margin:{l:4,r:64,t:36,b:56}, shapes, annotations,
+    hovermode:'closest', dragmode:'pan',
+    hoverlabel:{bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}},
+    legend:{x:0.01,y:0.98,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}},
+  }, { responsive:true, scrollZoom:true, displayModeBar:true,
+    modeBarButtonsToRemove:['lasso2d','select2d','toggleSpikelines'],
+    modeBarButtonsToAdd:['resetScale2d'] });
 }
 
 /* ── INIT ─────────────────────────────────────── */

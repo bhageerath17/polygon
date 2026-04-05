@@ -38,6 +38,11 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/fetch.py
 
+      - name: Fetch SPY + VIX 1-min intraday data
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: PYTHONPATH=. uv run python scripts/fetch_intraday.py
+
       - name: Run patches analysis
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
@@ -48,10 +53,15 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/reversal_analysis.py
 
-      - name: Build prediction model
+      - name: Build prediction model (Model 1)
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/build_model.py
+
+      - name: Build prediction model (Model 2 — triple-barrier + calibration)
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: PYTHONPATH=. uv run python scripts/build_model2.py
 
       - name: Copy data into dashboard
         run: |
@@ -60,6 +70,7 @@ jobs:
           cp data/patches_analysis.json dashboard/
           cp data/reversal_analysis.json dashboard/
           cp data/model_results.json dashboard/
+          cp data/model2_results.json dashboard/
 
       - uses: actions/configure-pages@v5
 
