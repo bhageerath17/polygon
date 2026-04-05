@@ -51,7 +51,8 @@ def build_0dte_call_ticker(spx_price: float, trade_date: date, strike_rounding: 
     atm_strike = round(spx_price / strike_rounding) * strike_rounding
     date_str   = trade_date.strftime("%y%m%d")
     strike_int = int(atm_strike * 1000)
-    return f"O:SPX{date_str}C{strike_int:08d}"
+    # Polygon uses SPXW prefix for 0DTE weeklies (Mon/Wed/Fri/Tue/Thu)
+    return f"O:SPXW{date_str}C{strike_int:08d}"
 
 
 # ── Reversal event ─────────────────────────────────────────────────────────────

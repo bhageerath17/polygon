@@ -1,4 +1,4 @@
-.PHONY: setup fetch analyze reversal run serve clean
+.PHONY: setup fetch analyze reversal model run serve clean
 
 setup:
 	uv sync --all-extras
@@ -13,11 +13,14 @@ analyze:
 reversal:
 	PYTHONPATH=. uv run python scripts/reversal_analysis.py
 
+model:
+	PYTHONPATH=. uv run python scripts/build_model.py
+
 run:
 	PYTHONPATH=. uv run python scripts/backtest.py
 
 serve:
-	cp data/spx_1min.csv data/spx_options_snapshot.csv data/patches_analysis.json data/reversal_analysis.json dashboard/
+	cp data/spx_1min.csv data/spx_options_snapshot.csv data/patches_analysis.json data/reversal_analysis.json data/model_results.json dashboard/
 	@echo "Open http://localhost:8000/dashboard/"
 	uv run python -m http.server 8000
 

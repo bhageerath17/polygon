@@ -8,6 +8,8 @@ dependencies = [
     "requests>=2.32",
     "pandas>=2.2",
     "python-dotenv>=1.0",
+    "scikit-learn>=1.4",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]

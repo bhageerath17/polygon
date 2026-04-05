@@ -88,6 +88,7 @@
     <button class="tab-btn active" onclick="switchTab('tab-overview',  this)">Overview</button>
     <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
     <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
+    <button class="tab-btn"        onclick="switchTab('tab-model',     this)">Prediction Model</button>
     <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
   </div>
   <span id="last-updated"></span>
@@ -254,7 +255,65 @@
 </div>
 
 <!-- ════════════════════════════════════════════════
-     TAB 4 — PRICE SUMMARY
+     TAB 4 — PREDICTION MODEL
+════════════════════════════════════════════════ -->
+<div id="tab-model" class="tab-panel">
+
+  <!-- Summary cards -->
+  <div class="grid" id="model-cards"></div>
+
+  <!-- Confusion matrix + feature importance side by side -->
+  <div class="two-col" style="padding-top:8px;">
+    <div class="panel" id="confusion-panel"><h3>Confusion Matrix (LOOCV)</h3></div>
+    <div class="panel" id="feature-panel"><h3>Feature Importance (|coefficient|)</h3></div>
+  </div>
+
+  <!-- Squeeze → probability lift -->
+  <section>
+    <h2>Squeeze Strength → Predicted Probability of Significant Reversal</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:14px;">
+      Average LOOCV probability (reversal ≥ 20 pts) grouped by ATM 0DTE call squeeze detected before the swing low.
+      Strong squeeze consistently raises prediction confidence.
+    </p>
+    <div id="squeeze-prob-bars" style="padding:4px 0;"></div>
+  </section>
+
+  <!-- SPX price chart with reversal markers -->
+  <section>
+    <h2>SPX Daily Close — Reversal Events &amp; Predictions</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
+      Each marker = a detected reversal event.
+      <span style="color:#3fb950">&#9650;</span> Hit (prediction correct) &nbsp;
+      <span style="color:#f85149">&#9660;</span> Miss (prediction wrong) &nbsp;
+      Marker size ∝ predicted probability.
+    </p>
+    <div style="overflow-x:auto;">
+      <canvas id="spx-chart" height="220" style="width:100%;min-width:700px;"></canvas>
+    </div>
+  </section>
+
+  <!-- Per-event prediction table -->
+  <section>
+    <h2>Per-Event Predictions (LOOCV)</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
+      Target = <b>medium or strong reversal</b> (reversal ≥ 20 pts). Probabilities are out-of-sample (leave-one-out cross-validation).
+    </p>
+    <div class="tbl-wrap">
+      <table id="model-events-table">
+        <thead><tr>
+          <th>Date</th><th>Low Time</th><th>Fall</th><th>Reversal</th>
+          <th>Rev. Cat.</th><th>Squeeze</th><th>VIX</th>
+          <th>Pred Prob</th><th>Prediction</th><th>Actual</th><th>Result</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- ════════════════════════════════════════════════
+     TAB 5 — PRICE SUMMARY
 ════════════════════════════════════════════════ -->
 <div id="tab-price" class="tab-panel">
   <div class="grid" id="summary-cards"></div>
@@ -705,20 +764,239 @@ function loadTab3Reversals(r) {
     </tr>`).join('');
 }
 
+/* ── TAB 4 — PREDICTION MODEL ─────────────────── */
+function loadModelTab(m, spxPrice) {
+  if (!m || m.error) {
+    document.getElementById('model-cards').innerHTML =
+      `<div class="card" style="grid-column:1/-1"><div class="value neutral">${m?.error || 'Model data unavailable'}</div></div>`;
+    return;
+  }
+
+  const cm = m.confusion_matrix || {};
+  const acc = (m.loocv_accuracy * 100).toFixed(1);
+  const pre = (m.precision * 100).toFixed(1);
+  const rec = (m.recall * 100).toFixed(1);
+  const br  = (m.base_rate * 100).toFixed(1);
+
+  // Cards
+  document.getElementById('model-cards').innerHTML = [
+    { label:'Events Analysed',         value: m.n_events,            sub: m.target || '',           cls:'neutral' },
+    { label:'Significant Reversals',   value: `${m.n_significant_reversals} (${br}%)`, sub:'rev ≥ 20 pts', cls:'up' },
+    { label:'LOOCV Accuracy',          value: acc + '%',             sub:'leave-one-out CV',        cls: parseFloat(acc) >= 70 ? 'up' : 'neutral' },
+    { label:'Precision',               value: pre + '%',             sub:'of predicted significant', cls: parseFloat(pre) >= 70 ? 'up' : 'neutral' },
+    { label:'Recall',                  value: rec + '%',             sub:'of actual significant',    cls: parseFloat(rec) >= 50 ? 'up' : 'neutral' },
+    { label:'Squeeze → +Prob',         value: '+' + ((m.squeeze_impact?.strong||0) - (m.squeeze_impact?.none||0) > 0
+                                              ? (((m.squeeze_impact?.strong||0) - (m.squeeze_impact?.none||0))*100).toFixed(0) + '%'
+                                              : '—'),
+                                        sub:'none→strong squeeze lift', cls:'up' },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div>
+    <div class="value ${c.cls||''}">${c.value}</div><div class="sub">${c.sub}</div></div>`).join('');
+
+  // Confusion matrix
+  const tp=cm.tp||0, fp=cm.fp||0, tn=cm.tn||0, fn=cm.fn||0;
+  document.getElementById('confusion-panel').innerHTML = `<h3>Confusion Matrix (LOOCV)</h3>
+    <p style="font-size:0.72rem;color:#8b949e;margin-bottom:12px;">
+      Predicted rows × Actual columns. Target = reversal ≥ 20 pts (medium or strong).
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem;text-align:center;">
+      <thead><tr>
+        <th style="text-align:left;padding:6px;color:#8b949e"></th>
+        <th style="padding:6px;color:#3fb950">Act. Significant</th>
+        <th style="padding:6px;color:#f85149">Act. Weak</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td style="text-align:left;padding:6px;color:#8b949e;font-size:0.78rem">Pred. Significant</td>
+          <td style="padding:6px;background:#0d332133;color:#3fb950;font-weight:700;font-size:1.1rem">${tp}</td>
+          <td style="padding:6px;background:#3b0f0f33;color:#f85149;font-weight:700;font-size:1.1rem">${fp}</td>
+        </tr>
+        <tr>
+          <td style="text-align:left;padding:6px;color:#8b949e;font-size:0.78rem">Pred. Weak</td>
+          <td style="padding:6px;background:#3b0f0f33;color:#f85149;font-weight:700;font-size:1.1rem">${fn}</td>
+          <td style="padding:6px;background:#0d332133;color:#3fb950;font-weight:700;font-size:1.1rem">${tn}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:12px;font-size:0.78rem;color:#8b949e;">
+      <b style="color:#e6edf3">How to read:</b> TP=${tp} correctly called significant ·
+      FP=${fp} false positives · FN=${fn} missed · TN=${tn} correctly called weak
+    </div>`;
+
+  // Feature importance
+  const fi = m.feature_importance || [];
+  const maxCoef = Math.max(...fi.map(f => Math.abs(f.coefficient)));
+  const FEAT_LABELS = {
+    squeeze_encoded: 'Squeeze Strength',
+    vix_prev: 'Prior VIX',
+    hour_of_low: 'Hour of Low',
+    fall_pts: 'Fall Points',
+    fall_normalized: 'Fall / VIX',
+    is_monday: 'Is Monday',
+    is_friday: 'Is Friday',
+  };
+  document.getElementById('feature-panel').innerHTML = `<h3>Feature Importance (|coefficient|)</h3>` +
+    fi.map(f => {
+      const w  = (Math.abs(f.coefficient) / maxCoef * 100).toFixed(1);
+      const col = f.coefficient > 0 ? '#3fb950' : '#f85149';
+      const dir = f.coefficient > 0 ? '↑ bullish' : '↓ bearish';
+      return `<div class="stat-row" style="align-items:center;">
+        <span class="stat-label" style="min-width:140px">${FEAT_LABELS[f.feature]||f.feature}</span>
+        <span style="flex:1;display:flex;align-items:center;gap:6px;">
+          <span style="display:inline-block;height:10px;width:${w}%;background:${col};border-radius:2px;transition:width .3s"></span>
+          <span style="font-size:0.72rem;color:${col}">${dir}</span>
+        </span>
+        <span class="stat-val" style="color:${col};margin-left:6px">${f.coefficient > 0 ? '+' : ''}${f.coefficient.toFixed(3)}</span>
+      </div>`;
+    }).join('');
+
+  // Squeeze prob bars
+  const si = m.squeeze_impact || {};
+  const siOrder = ['none','mild','moderate','strong'];
+  const siColors = { none:'#8b949e', mild:'#e3b341', moderate:'#56d364', strong:'#3fb950' };
+  const maxProb = Math.max(...siOrder.map(k => si[k]||0));
+  document.getElementById('squeeze-prob-bars').innerHTML = siOrder.filter(k => si[k] != null).map(k => {
+    const pct2 = ((si[k]||0)*100).toFixed(1);
+    const w = ((si[k]||0)/maxProb*100).toFixed(1);
+    return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <span style="width:80px;font-size:0.82rem;color:${siColors[k]};font-weight:600">${k.charAt(0).toUpperCase()+k.slice(1)}</span>
+      <div style="flex:1;background:#161b22;border-radius:4px;height:28px;position:relative;border:1px solid #21262d;">
+        <div style="height:100%;width:${w}%;background:${siColors[k]};border-radius:4px;opacity:0.8;transition:width .4s"></div>
+        <span style="position:absolute;left:${parseFloat(w)>15?'8px':'calc('+w+'% + 8px)'};top:50%;transform:translateY(-50%);font-size:0.78rem;font-weight:700;color:${parseFloat(w)>15?'#0d1117':'#e6edf3'}">${pct2}%</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // SPX price chart with reversal markers
+  drawSPXChart(spxPrice, m.event_predictions || []);
+
+  // Events table
+  const evts = m.event_predictions || [];
+  document.querySelector('#model-events-table tbody').innerHTML = evts.map(e => {
+    const prob    = (e.pred_prob_significant * 100).toFixed(1);
+    const hitCls  = e.hit ? '#3fb950' : '#f85149';
+    const hitIcon = e.hit ? '&#9650; Hit' : '&#9660; Miss';
+    const predTxt = e.pred_significant ? 'Significant' : 'Weak';
+    const actTxt  = e.actual_significant ? 'Significant' : 'Weak';
+    return `<tr>
+      <td>${e.date}</td>
+      <td>${e.time_of_low}</td>
+      <td class="down">${fmt(e.fall_pts,1)} pts</td>
+      <td class="up">${fmt(e.reversal_pts,1)} pts</td>
+      <td><span class="badge" style="background:${REV_COLORS[e.reversal_category]||'#8b949e'}22;color:${REV_COLORS[e.reversal_category]||'#8b949e'}">${e.reversal_category}</span></td>
+      <td><span class="badge" style="background:${SQ_COLORS[e.squeeze_strength]||'#8b949e'}22;color:${SQ_COLORS[e.squeeze_strength]||'#8b949e'}">${e.squeeze_strength}</span></td>
+      <td>${fmt(e.vix_prev,1)}</td>
+      <td><b style="color:${parseFloat(prob)>=60?'#3fb950':parseFloat(prob)>=45?'#e3b341':'#8b949e'}">${prob}%</b></td>
+      <td><span class="badge ${e.pred_significant?'call':'neutral-z'}">${predTxt}</span></td>
+      <td><span class="badge ${e.actual_significant?'call':'neutral-z'}">${actTxt}</span></td>
+      <td style="color:${hitCls};font-weight:600">${hitIcon}</td>
+    </tr>`;
+  }).join('');
+}
+
+function drawSPXChart(spxPrice, eventPredictions) {
+  const canvas = document.getElementById('spx-chart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 900;
+  const H = 220;
+  canvas.width = W;
+  canvas.height = H;
+  const PAD = { top: 20, right: 30, bottom: 30, left: 60 };
+
+  // Aggregate to daily closes from 1-min CSV
+  const dailyMap = {};
+  spxPrice.forEach(r => {
+    const dt = (r.datetime || r.date || '').slice(0, 10);
+    const cl = parseFloat(r.close);
+    if (dt && !isNaN(cl)) dailyMap[dt] = cl;
+  });
+  const days   = Object.keys(dailyMap).sort();
+  const closes = days.map(d => dailyMap[d]);
+  if (!days.length) return;
+
+  const minP = Math.min(...closes) * 0.999;
+  const maxP = Math.max(...closes) * 1.001;
+  const xScale = i => PAD.left + (i / (days.length - 1)) * (W - PAD.left - PAD.right);
+  const yScale = p => PAD.top  + (1 - (p - minP) / (maxP - minP)) * (H - PAD.top - PAD.bottom);
+
+  // Background
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = PAD.top + i * (H - PAD.top - PAD.bottom) / 4;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+    const val = maxP - i * (maxP - minP) / 4;
+    ctx.fillStyle = '#8b949e'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(0), PAD.left - 4, y + 4);
+  }
+
+  // SPX line
+  ctx.strokeStyle = '#58a6ff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  closes.forEach((p, i) => i === 0 ? ctx.moveTo(xScale(i), yScale(p)) : ctx.lineTo(xScale(i), yScale(p)));
+  ctx.stroke();
+
+  // X-axis month labels
+  ctx.fillStyle = '#8b949e'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  let lastMonth = '';
+  days.forEach((d, i) => {
+    const mo = d.slice(0, 7);
+    if (mo !== lastMonth) {
+      lastMonth = mo;
+      ctx.fillText(new Date(d+'T12:00:00').toLocaleString('default',{month:'short'}), xScale(i), H - 6);
+    }
+  });
+
+  // Reversal event markers
+  const eventMap = {};
+  eventPredictions.forEach(e => { eventMap[e.date] = e; });
+
+  days.forEach((d, i) => {
+    const e = eventMap[d];
+    if (!e) return;
+    const x = xScale(i);
+    const y = yScale(closes[i]);
+    const prob = e.pred_prob_significant;
+    const r    = 4 + prob * 8;  // radius 4–12 based on prob
+    const col  = e.hit ? '#3fb950' : '#f85149';
+
+    ctx.beginPath();
+    ctx.arc(x, y - r - 4, r, 0, Math.PI * 2);
+    ctx.fillStyle = col + '33';
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Arrow
+    ctx.fillStyle = col;
+    ctx.font = `bold ${Math.round(r * 1.2)}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillText(e.hit ? '▲' : '▼', x, y - r * 2 - 4);
+  });
+}
+
 /* ── INIT ─────────────────────────────────────── */
 async function init() {
   const status = document.getElementById('status');
   try {
-    const [price, opts, analysis, reversals] = await Promise.all([
+    const [price, opts, analysis, reversals, model] = await Promise.all([
       loadCSV('spx_1min.csv'),
       loadCSV('spx_options_snapshot.csv'),
       loadJSON('patches_analysis.json'),
       loadJSON('reversal_analysis.json').catch(() => ({ total_events: 0 })),
+      loadJSON('model_results.json').catch(() => null),
     ]);
     buildOverview(analysis);
     await loadTab2(price, opts);
     loadTab3(analysis);
     loadTab3Reversals(reversals);
+    loadModelTab(model, price);
     status.textContent = '';
     document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleString()}`;
   } catch(e) {
