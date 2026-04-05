@@ -183,9 +183,13 @@ def fetch_atm_call_data(
                 df.index = pd.to_datetime(df.index, utc=True).tz_convert("America/New_York")
         else:
             print(f"  Fetching {ticker} for {event.date}…")
-            df = get_option_1min(ticker, str(event.date))
-            if not df.empty:
-                df.to_csv(cache_path)
+            try:
+                df = get_option_1min(ticker, str(event.date))
+                if not df.empty:
+                    df.to_csv(cache_path)
+            except Exception as e:
+                print(f"  Options fetch skipped ({type(e).__name__}: {e})")
+                df = pd.DataFrame()
 
         results[event.date] = df if not df.empty else pd.DataFrame()
 

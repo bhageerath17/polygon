@@ -3,13 +3,13 @@ base_url = "https://api.polygon.io"
 
 [data]
 ticker        = "I:SPX"
-start_date    = "2026-01-02"
+start_date    = "2023-03-01"
 end_date      = "2026-04-03"
 options_limit = 250
 
 [vix]
 ticker     = "I:VIX"
-start_date = "2025-12-30"   # extra days for prev-day VIX on Jan 2
+start_date = "2023-02-24"   # extra days for prev-day VIX on 2023-03-01
 end_date   = "2026-04-03"
 
 [analysis]
@@ -21,11 +21,23 @@ rolling_window_mins = 30
 squeeze_lookback    = 20
 strike_rounding     = 25
 
+[spy]
+ticker     = "SPY"
+start_date = "2023-03-01"
+end_date   = "2026-04-03"
+
+[vix_1min]
+ticker     = "I:VIX"
+start_date = "2023-03-01"
+end_date   = "2026-04-03"
+
 [paths]
 data_dir      = "data"
 price_csv     = "spx_1min.csv"
 options_csv   = "spx_options_snapshot.csv"
 vix_csv       = "vix_daily.csv"
+spy_1min_csv  = "spy_1min.csv"
+vix_1min_csv  = "vix_1min.csv"
 analysis_csv  = "patches_analysis.csv"
 analysis_json = "patches_analysis.json"
 reversal_csv  = "reversal_analysis.csv"

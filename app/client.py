@@ -5,16 +5,24 @@ from app.config import settings
 
 
 class PolygonClient:
-    def __init__(self, rate_limit_sleep: float = 0.2):
+    def __init__(self, rate_limit_sleep: float = 0.25):
         self._sleep = rate_limit_sleep
         self._session = requests.Session()
 
-    def get(self, url: str, params: dict | None = None) -> dict:
+    def get(self, url: str, params: dict | None = None, _retries: int = 5) -> dict:
         p = {"apiKey": settings.api_key, **(params or {})}
-        resp = self._session.get(url, params=p)
+        for attempt in range(_retries):
+            resp = self._session.get(url, params=p)
+            if resp.status_code == 429:
+                wait = 12 * (attempt + 1)
+                print(f"  Rate limit — waiting {wait}s …")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            time.sleep(self._sleep)
+            return resp.json()
         resp.raise_for_status()
-        time.sleep(self._sleep)
-        return resp.json()
+        return {}
 
     def get_paginated(self, url: str, params: dict | None = None) -> list[dict]:
         all_results: list[dict] = []

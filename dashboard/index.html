@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SPX Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
@@ -278,18 +279,18 @@
     <div id="squeeze-prob-bars" style="padding:4px 0;"></div>
   </section>
 
-  <!-- SPX price chart with reversal markers -->
+  <!-- SPX 5-min candle chart with reversal markers (Plotly) -->
   <section>
-    <h2>SPX Daily Close — Reversal Events &amp; Predictions</h2>
+    <h2>SPX 1-Min Candles — Last 7 Trading Days · Ensemble Reversal Predictions</h2>
     <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
-      Each marker = a detected reversal event.
-      <span style="color:#3fb950">&#9650;</span> Hit (prediction correct) &nbsp;
-      <span style="color:#f85149">&#9660;</span> Miss (prediction wrong) &nbsp;
-      Marker size ∝ predicted probability.
+      1-minute SPX candles · prediction marker pinned to the <b style="color:#e6edf3">exact swing-low candle</b>.
+      &nbsp;<span style="color:#3fb950">▲ Hit</span> — predicted reversal &amp; it reversed &nbsp;|&nbsp;
+      <span style="color:#f85149">▼ Miss</span> — predicted reversal, didn't reverse &nbsp;|&nbsp;
+      <span style="color:#e3b341">◆</span> Predicted weak (no call made) &nbsp;·&nbsp;
+      Marker size ∝ model probability.
+      &nbsp;<b style="color:#3fb950">Scroll</b> to zoom time · <b style="color:#3fb950">Drag</b> Y-axis to scale price.
     </p>
-    <div style="overflow-x:auto;">
-      <canvas id="spx-chart" height="220" style="width:100%;min-width:700px;"></canvas>
-    </div>
+    <div id="spx-plotly-chart" style="width:100%;height:480px;"></div>
   </section>
 
   <!-- Per-event prediction table -->
@@ -390,11 +391,25 @@
 </div>
 
 <script>
+let _spxPriceCache = null;
+let _modelCache    = null;
+
 function switchTab(id, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   btn.classList.add('active');
+  // Plotly needs a resize after the panel becomes visible
+  if (id === 'tab-model') {
+    const el = document.getElementById('spx-plotly-chart');
+    if (el && typeof Plotly !== 'undefined') {
+      if (el.data && el.data.length) {
+        Plotly.Plots.resize(el);
+      } else if (_spxPriceCache && _modelCache) {
+        drawSPXPlotly(_spxPriceCache, _modelCache.event_predictions || []);
+      }
+    }
+  }
 }
 
 async function loadCSV(path) {
@@ -785,10 +800,8 @@ function loadModelTab(m, spxPrice) {
     { label:'LOOCV Accuracy',          value: acc + '%',             sub:'leave-one-out CV',        cls: parseFloat(acc) >= 70 ? 'up' : 'neutral' },
     { label:'Precision',               value: pre + '%',             sub:'of predicted significant', cls: parseFloat(pre) >= 70 ? 'up' : 'neutral' },
     { label:'Recall',                  value: rec + '%',             sub:'of actual significant',    cls: parseFloat(rec) >= 50 ? 'up' : 'neutral' },
-    { label:'Squeeze → +Prob',         value: '+' + ((m.squeeze_impact?.strong||0) - (m.squeeze_impact?.none||0) > 0
-                                              ? (((m.squeeze_impact?.strong||0) - (m.squeeze_impact?.none||0))*100).toFixed(0) + '%'
-                                              : '—'),
-                                        sub:'none→strong squeeze lift', cls:'up' },
+    { label:'Precision (High-Prec Mode)',value: pre + '%',             sub:`threshold ${m.optimal_threshold||0.5}`, cls: parseFloat(pre) >= 80 ? 'up' : 'neutral' },
+    { label:'Models Ensemble',          value: (m.models_used||[]).length,sub:(m.models_used||[]).join(' · ').replace('meta:logistic','meta:LR'), cls:'neutral' },
   ].map(c => `<div class="card"><div class="label">${c.label}</div>
     <div class="value ${c.cls||''}">${c.value}</div><div class="sub">${c.sub}</div></div>`).join('');
 
@@ -824,28 +837,62 @@ function loadModelTab(m, spxPrice) {
 
   // Feature importance
   const fi = m.feature_importance || [];
-  const maxCoef = Math.max(...fi.map(f => Math.abs(f.coefficient)));
+  // model now exports 'importance' (tree-based); fall back to |coefficient| for legacy
+  const _val = f => Math.abs(f.importance ?? f.coefficient ?? 0);
+  const maxCoef = Math.max(...fi.map(_val), 0.0001);
   const FEAT_LABELS = {
-    squeeze_encoded: 'Squeeze Strength',
-    vix_prev: 'Prior VIX',
-    hour_of_low: 'Hour of Low',
-    fall_pts: 'Fall Points',
-    fall_normalized: 'Fall / VIX',
-    is_monday: 'Is Monday',
-    is_friday: 'Is Friday',
+    // Core
+    squeeze_encoded:    'Squeeze Strength',
+    vix_prev:           'Prior VIX',
+    hour_of_low:        'Hour of Low',
+    fall_pts:           'Fall Points',
+    fall_normalized:    'Fall / VIX',
+    is_monday:          'Is Monday',
+    is_friday:          'Is Friday',
+    // VIX momentum
+    vix_1d_change:      'VIX 1-Day Change',
+    vix_5d_change:      'VIX 5-Day Change',
+    vix_vs_20d:         'VIX vs 20d Avg',
+    vix_5d_avg:         'VIX 5-Day Avg',
+    vix_trend_up:       'VIX Trending Up',
+    vix_regime:         'VIX Regime (0-2)',
+    // Gap / opening
+    gap_pts:            'Gap Points',
+    gap_pct:            'Gap %',
+    gap_dir:            'Gap Direction',
+    open5_range:        'Opening 5-Min Range',
+    open5_dir:          'Opening 5-Min Direction',
+    spx_5d_ret:         'SPX 5-Day Return',
+    fall_speed:         'Fall Speed (pts/bar)',
+    pct_day_at_low:     'Day Elapsed at Low',
+    // Straddle
+    fall_vs_straddle:   'Fall / Straddle Proxy',
+    // Squeeze
+    squeeze_duration:   'Squeeze Duration (bars)',
+    expansion_ratio:    'Expansion / Min-Body Ratio',
+    // Calendar
+    is_tuesday:         'Is Tuesday',
+    is_wednesday:       'Is Wednesday',
+    dow_encoded:        'Day of Week',
+    minute_of_low:      'Minute of Low',
+    is_morning:         'Is Morning (<11am)',
+    is_afternoon:       'Is Afternoon (>1pm)',
+    // Interactions
+    vix_x_squeeze:      'VIX × Squeeze',
+    gap_dir_x_fall:     'Gap Dir × Fall',
+    vix_change_x_fall:  'VIX Δ × Fall',
   };
   document.getElementById('feature-panel').innerHTML = `<h3>Feature Importance (|coefficient|)</h3>` +
     fi.map(f => {
-      const w  = (Math.abs(f.coefficient) / maxCoef * 100).toFixed(1);
-      const col = f.coefficient > 0 ? '#3fb950' : '#f85149';
-      const dir = f.coefficient > 0 ? '↑ bullish' : '↓ bearish';
+      const val = _val(f);
+      const w   = (val / maxCoef * 100).toFixed(1);
+      const col = '#58a6ff';
       return `<div class="stat-row" style="align-items:center;">
-        <span class="stat-label" style="min-width:140px">${FEAT_LABELS[f.feature]||f.feature}</span>
+        <span class="stat-label" style="min-width:160px;font-size:0.78rem">${FEAT_LABELS[f.feature]||f.feature}</span>
         <span style="flex:1;display:flex;align-items:center;gap:6px;">
           <span style="display:inline-block;height:10px;width:${w}%;background:${col};border-radius:2px;transition:width .3s"></span>
-          <span style="font-size:0.72rem;color:${col}">${dir}</span>
         </span>
-        <span class="stat-val" style="color:${col};margin-left:6px">${f.coefficient > 0 ? '+' : ''}${f.coefficient.toFixed(3)}</span>
+        <span class="stat-val" style="color:${col};margin-left:6px;font-size:0.78rem">${val.toFixed(3)}</span>
       </div>`;
     }).join('');
 
@@ -866,8 +913,8 @@ function loadModelTab(m, spxPrice) {
     </div>`;
   }).join('');
 
-  // SPX price chart with reversal markers
-  drawSPXChart(spxPrice, m.event_predictions || []);
+  // SPX 5-min candle chart with reversal markers (Plotly)
+  drawSPXPlotly(spxPrice, m.event_predictions || []);
 
   // Events table
   const evts = m.event_predictions || [];
@@ -893,92 +940,274 @@ function loadModelTab(m, spxPrice) {
   }).join('');
 }
 
-function drawSPXChart(spxPrice, eventPredictions) {
-  const canvas = document.getElementById('spx-chart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W = canvas.offsetWidth || 900;
-  const H = 220;
-  canvas.width = W;
-  canvas.height = H;
-  const PAD = { top: 20, right: 30, bottom: 30, left: 60 };
+function drawSPXPlotly(spxPrice, eventPredictions) {
+  const el = document.getElementById('spx-plotly-chart');
+  if (!el || typeof Plotly === 'undefined') return;
 
-  // Aggregate to daily closes from 1-min CSV
-  const dailyMap = {};
+  // ── 1. Build 1-min RTH candles, last 7 trading days ───────────────────────
+  const allCandles = [];
   spxPrice.forEach(r => {
-    const dt = (r.datetime || r.date || '').slice(0, 10);
-    const cl = parseFloat(r.close);
-    if (dt && !isNaN(cl)) dailyMap[dt] = cl;
+    const raw = r.datetime || r.date || '';
+    if (!raw) return;
+    const datePart = raw.slice(0, 10);
+    const timePart = raw.slice(11, 16);   // "HH:MM" — wall-clock ET from string
+    if (!timePart || timePart.length < 5) return;
+    const [hh, mm] = timePart.split(':').map(Number);
+    const totalMin = hh * 60 + mm;
+    if (totalMin < 9 * 60 + 30 || totalMin >= 16 * 60) return;  // RTH only
+    const o = parseFloat(r.open), h = parseFloat(r.high);
+    const l = parseFloat(r.low),  c = parseFloat(r.close);
+    if (isNaN(o) || isNaN(c)) return;
+    allCandles.push({ t: `${datePart}T${timePart}`, date: datePart, o, h, l, c });
   });
-  const days   = Object.keys(dailyMap).sort();
-  const closes = days.map(d => dailyMap[d]);
-  if (!days.length) return;
+  allCandles.sort((a, b) => (a.t < b.t ? -1 : 1));
 
-  const minP = Math.min(...closes) * 0.999;
-  const maxP = Math.max(...closes) * 1.001;
-  const xScale = i => PAD.left + (i / (days.length - 1)) * (W - PAD.left - PAD.right);
-  const yScale = p => PAD.top  + (1 - (p - minP) / (maxP - minP)) * (H - PAD.top - PAD.bottom);
+  const uniqueDays = [...new Set(allCandles.map(c => c.date))];
+  const last7days  = new Set(uniqueDays.slice(-7));
+  const candles    = allCandles.filter(c => last7days.has(c.date));
 
-  // Background
-  ctx.fillStyle = '#0d1117';
-  ctx.fillRect(0, 0, W, H);
-
-  // Grid lines
-  ctx.strokeStyle = '#21262d';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = PAD.top + i * (H - PAD.top - PAD.bottom) / 4;
-    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
-    const val = maxP - i * (maxP - minP) / 4;
-    ctx.fillStyle = '#8b949e'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
-    ctx.fillText(val.toFixed(0), PAD.left - 4, y + 4);
+  if (!candles.length) {
+    el.innerHTML = '<p style="color:#8b949e;padding:20px;">No 1-min price data for this window.</p>';
+    return;
   }
 
-  // SPX line
-  ctx.strokeStyle = '#58a6ff';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  closes.forEach((p, i) => i === 0 ? ctx.moveTo(xScale(i), yScale(p)) : ctx.lineTo(xScale(i), yScale(p)));
-  ctx.stroke();
+  // Build index map: "YYYY-MM-DDTHH:MM" → array index (for O(1) exact lookup)
+  const candleIdx = {};
+  candles.forEach((c, i) => { candleIdx[c.t] = i; });
 
-  // X-axis month labels
-  ctx.fillStyle = '#8b949e'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-  let lastMonth = '';
-  days.forEach((d, i) => {
-    const mo = d.slice(0, 7);
-    if (mo !== lastMonth) {
-      lastMonth = mo;
-      ctx.fillText(new Date(d+'T12:00:00').toLocaleString('default',{month:'short'}), xScale(i), H - 6);
+  const xs  = candles.map(c => c.t);
+  const ops = candles.map(c => c.o);
+  const his = candles.map(c => c.h);
+  const los = candles.map(c => c.l);
+  const cls = candles.map(c => c.c);
+
+  // ── 2. Prediction markers — pin to EXACT time_of_low 1-min candle ─────────
+  const shapes = [];       // vertical highlight for each prediction candle
+  const markerX = [], markerY = [], markerColors = [], markerSizes = [];
+  const markerSymbols = [], hoverTexts = [];
+
+  eventPredictions.forEach(ev => {
+    if (!last7days.has(ev.date)) return;
+    const lowHHMM = (ev.time_of_low || '12:00:00').slice(0, 5);   // "HH:MM"
+    const exactKey = `${ev.date}T${lowHHMM}`;
+
+    // Exact match first; if not found (off-by-1 min) walk ± 2 bars
+    let candleKey = exactKey;
+    if (candleIdx[candleKey] === undefined) {
+      const [h2, m2] = lowHHMM.split(':').map(Number);
+      for (let delta = 1; delta <= 2; delta++) {
+        for (const sign of [-1, 1]) {
+          const adj  = m2 + sign * delta;
+          const adjH = h2 + Math.floor(adj / 60);
+          const adjM = ((adj % 60) + 60) % 60;
+          const k2   = `${ev.date}T${String(adjH).padStart(2,'0')}:${String(adjM).padStart(2,'0')}`;
+          if (candleIdx[k2] !== undefined) { candleKey = k2; break; }
+        }
+        if (candleIdx[candleKey] !== undefined) break;
+      }
+    }
+    if (candleIdx[candleKey] === undefined) return;
+
+    const candle = candles[candleIdx[candleKey]];
+    const prob   = ev.pred_prob_significant || 0;
+    const isSig  = ev.pred_significant;
+    const isHit  = ev.hit;
+
+    // Colors: green = significant+hit, red = significant+miss, yellow = not predicted significant
+    const color  = isSig ? (isHit ? '#3fb950' : '#f85149') : '#e3b341';
+    const symbol = isSig ? (isHit ? 'triangle-up' : 'triangle-down') : 'diamond';
+    const size   = 14 + prob * 18;
+
+    // Vertical highlight shape on the exact candle column
+    shapes.push({
+      type: 'rect',
+      x0: candleKey, x1: candleKey,
+      y0: 0, y1: 1, yref: 'paper',
+      line: { color, width: 2 },
+      fillcolor: color + '22',
+      layer: 'below',
+    });
+
+    markerX.push(candleKey);
+    markerY.push(candle.l - (candle.h - candle.l) * 0.4);  // below wick
+    markerColors.push(color);
+    markerSizes.push(size);
+    markerSymbols.push(symbol);
+    hoverTexts.push(
+      `<b>${ev.date}  ${lowHHMM}</b><br>` +
+      `Model prob: <b style="color:${color}">${(prob*100).toFixed(1)}%</b><br>` +
+      `Prediction: <b>${isSig ? 'REVERSAL' : 'Weak'}</b><br>` +
+      `Actual: <b>${ev.actual_significant ? 'REVERSAL ✓' : 'Weak'}</b><br>` +
+      `Result: <b>${isHit ? '✅ Hit' : '❌ Miss'}</b><br>` +
+      `───────────────<br>` +
+      `Fall: ${(+ev.fall_pts).toFixed(1)} pts<br>` +
+      `Recovery: ${(+ev.reversal_pts).toFixed(1)} pts  (${ev.reversal_category})<br>` +
+      `Squeeze: ${ev.squeeze_strength}<br>` +
+      `VIX prev: ${ev.vix_prev ? (+ev.vix_prev).toFixed(1) : '—'}`
+    );
+  });
+
+  // Day boundary lines
+  const dayList = [...last7days].sort();
+  dayList.forEach(d => {
+    const key = `${d}T09:30`;
+    if (candleIdx[key] !== undefined) {
+      shapes.push({
+        type: 'line',
+        x0: key, x1: key,
+        y0: 0, y1: 1, yref: 'paper',
+        line: { color: '#30363d', width: 1, dash: 'dot' },
+        layer: 'above',
+      });
     }
   });
 
-  // Reversal event markers
-  const eventMap = {};
-  eventPredictions.forEach(e => { eventMap[e.date] = e; });
-
-  days.forEach((d, i) => {
-    const e = eventMap[d];
-    if (!e) return;
-    const x = xScale(i);
-    const y = yScale(closes[i]);
-    const prob = e.pred_prob_significant;
-    const r    = 4 + prob * 8;  // radius 4–12 based on prob
-    const col  = e.hit ? '#3fb950' : '#f85149';
-
-    ctx.beginPath();
-    ctx.arc(x, y - r - 4, r, 0, Math.PI * 2);
-    ctx.fillStyle = col + '33';
-    ctx.fill();
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Arrow
-    ctx.fillStyle = col;
-    ctx.font = `bold ${Math.round(r * 1.2)}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.fillText(e.hit ? '▲' : '▼', x, y - r * 2 - 4);
+  // Day label annotations
+  const annotations = dayList.map(d => {
+    const key35 = `${d}T09:35`;
+    return {
+      x: candleIdx[key35] !== undefined ? key35 : `${d}T09:30`,
+      y: 1.03, yref: 'paper',
+      text: new Date(d + 'T12:00:00').toLocaleDateString('en-US',
+        { weekday: 'short', month: 'short', day: 'numeric' }),
+      showarrow: false,
+      font: { size: 10, color: '#8b949e' },
+      xanchor: 'left',
+    };
   });
+
+  // ── 3. Traces ─────────────────────────────────────────────────────────────
+  const candleTrace = {
+    type: 'candlestick',
+    name: 'SPX 1-min',
+    x: xs, open: ops, high: his, low: los, close: cls,
+    increasing: { line: { color: '#26a641', width: 1 }, fillcolor: '#26a641' },
+    decreasing: { line: { color: '#da3633', width: 1 }, fillcolor: '#da3633' },
+    whiskerwidth: 0.3,
+    hovertemplate:
+      '<b>%{x}</b><br>' +
+      'O: %{open:.2f}  H: %{high:.2f}  L: %{low:.2f}  C: %{close:.2f}<extra></extra>',
+  };
+
+  const predTrace = {
+    type: 'scatter',
+    name: 'Predictions',
+    x: markerX,
+    y: markerY,
+    mode: 'markers',
+    marker: {
+      symbol:  markerSymbols,
+      size:    markerSizes,
+      color:   markerColors,
+      opacity: 0.95,
+      line: { width: 1.5, color: markerColors },
+    },
+    text: hoverTexts,
+    hoverinfo: 'text',
+    showlegend: true,
+  };
+
+  // ── 4. Layout — TradingView style ─────────────────────────────────────────
+  // Key: dragmode 'pan' + scrollZoom = TradingView feel
+  //      fixedrange: false on both axes = drag axis to scale
+  //      category x-axis = no overnight gaps
+  const layout = {
+    paper_bgcolor: '#0d1117',
+    plot_bgcolor:  '#0d1117',
+    font: { color: '#e6edf3', size: 11,
+            family: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+    xaxis: {
+      type:         'category',
+      rangeslider:  { visible: false },
+      fixedrange:   false,           // ← drag x-axis to pan/zoom time
+      showgrid:     true,
+      gridcolor:    '#1e2530',
+      gridwidth:    1,
+      tickfont:     { size: 9, color: '#8b949e' },
+      tickangle:    -45,
+      nticks:       18,
+      showline:     true,
+      linecolor:    '#30363d',
+      zeroline:     false,
+      // Show only HH:MM labels (strip the date prefix)
+      tickformat:   '',
+    },
+    yaxis: {
+      fixedrange:   false,           // ← drag y-axis to scale price
+      showgrid:     true,
+      gridcolor:    '#1e2530',
+      tickfont:     { size: 10, color: '#8b949e' },
+      side:         'right',
+      showline:     true,
+      linecolor:    '#30363d',
+      zeroline:     false,
+      autorange:    true,
+    },
+    margin:    { l: 4, r: 64, t: 36, b: 56 },
+    shapes,
+    annotations,
+    hovermode:  'closest',
+    dragmode:   'pan',               // ← pan by drag (like TradingView default)
+    hoverlabel: {
+      bgcolor:    '#161b22',
+      bordercolor:'#30363d',
+      font:       { size: 12, color: '#e6edf3' },
+    },
+    legend: {
+      x: 0.01, y: 0.98,
+      bgcolor:     '#161b2299',
+      bordercolor: '#30363d',
+      borderwidth: 1,
+      font:        { size: 10 },
+    },
+    // Show day date in tick label for first bar of each day
+    xaxis_ticktext: (() => {
+      // override tick labels: show "HH:MM" normally, show "MM/DD HH:MM" at day start
+      const labels = [], vals = [];
+      let lastDate = '';
+      candles.forEach((c, i) => {
+        const hhmm = c.t.slice(11);
+        if (c.date !== lastDate) {
+          lastDate = c.date;
+          const d = new Date(c.date + 'T12:00');
+          labels.push(`${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${hhmm}`);
+        } else {
+          labels.push(hhmm);
+        }
+        vals.push(c.t);
+      });
+      return { ticktext: labels, tickvals: vals };
+    })(),
+  };
+
+  // Apply the computed tick overrides
+  const ticks = layout.xaxis_ticktext;
+  delete layout.xaxis_ticktext;
+  layout.xaxis.tickvals = ticks.tickvals;
+  layout.xaxis.ticktext = ticks.ticktext;
+
+  const config = {
+    responsive:   true,
+    scrollZoom:   true,              // ← scroll to zoom X (or both when hovering axis)
+    displayModeBar: true,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'toggleSpikelines'],
+    modeBarButtonsToAdd: ['resetScale2d'],
+    toImageButtonOptions: { format: 'png', filename: 'spx_reversal_chart', scale: 2 },
+  };
+
+  Plotly.newPlot(el, [candleTrace, predTrace], layout, config);
+
+  // ── 5. Axis drag hints (first render only) ────────────────────────────────
+  if (!el._hintShown) {
+    el._hintShown = true;
+    const hint = document.createElement('div');
+    hint.style.cssText =
+      'position:absolute;bottom:6px;left:8px;font-size:0.68rem;color:#8b949e;pointer-events:none;z-index:10;';
+    hint.textContent = '🖱 Scroll = zoom X · Drag chart = pan · Drag Y-axis = scale price · Double-click = reset';
+    el.style.position = 'relative';
+    el.appendChild(hint);
+    setTimeout(() => hint.remove(), 6000);
+  }
 }
 
 /* ── INIT ─────────────────────────────────────── */
@@ -992,6 +1221,8 @@ async function init() {
       loadJSON('reversal_analysis.json').catch(() => ({ total_events: 0 })),
       loadJSON('model_results.json').catch(() => null),
     ]);
+    _spxPriceCache = price;
+    _modelCache    = model;
     buildOverview(analysis);
     await loadTab2(price, opts);
     loadTab3(analysis);

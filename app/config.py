@@ -22,10 +22,18 @@ class Settings:
     start_date: str
     end_date: str
     options_limit: int
-    # VIX
+    # VIX daily
     vix_ticker: str
     vix_start_date: str
     vix_end_date: str
+    # SPY 1-min
+    spy_ticker: str
+    spy_start_date: str
+    spy_end_date: str
+    # VIX 1-min
+    vix_1min_ticker: str
+    vix_1min_start_date: str
+    vix_1min_end_date: str
     # Analysis
     lookback_mins: int
     sig_levels: list
@@ -38,6 +46,8 @@ class Settings:
     price_csv: Path
     options_csv: Path
     vix_csv: Path
+    spy_1min_csv: Path
+    vix_1min_csv: Path
     analysis_csv: Path
     analysis_json: Path
     reversal_csv: Path
@@ -54,6 +64,12 @@ settings = Settings(
     vix_ticker=_cfg["vix"]["ticker"],
     vix_start_date=_cfg["vix"]["start_date"],
     vix_end_date=_cfg["vix"]["end_date"],
+    spy_ticker=_cfg["spy"]["ticker"],
+    spy_start_date=_cfg["spy"]["start_date"],
+    spy_end_date=_cfg["spy"]["end_date"],
+    vix_1min_ticker=_cfg["vix_1min"]["ticker"],
+    vix_1min_start_date=_cfg["vix_1min"]["start_date"],
+    vix_1min_end_date=_cfg["vix_1min"]["end_date"],
     lookback_mins=_cfg["analysis"]["lookback_mins"],
     sig_levels=_cfg["analysis"]["sig_levels"],
     reversal_window=_cfg["reversals"]["rolling_window_mins"],
@@ -63,6 +79,8 @@ settings = Settings(
     price_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["price_csv"],
     options_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["options_csv"],
     vix_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["vix_csv"],
+    spy_1min_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["spy_1min_csv"],
+    vix_1min_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["vix_1min_csv"],
     analysis_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_csv"],
     analysis_json=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_json"],
     reversal_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["reversal_csv"],
