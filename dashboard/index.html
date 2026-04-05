@@ -13,7 +13,7 @@
     header h1 { font-size: 1.3rem; font-weight: 700; }
     #last-updated { font-size: 0.78rem; color: #8b949e; margin-left: auto; }
 
-    .tabs { display: flex; border-bottom: 1px solid #21262d; padding: 0 32px; background: #010409; }
+    .tabs { display: flex; border-bottom: 1px solid #21262d; padding: 0 32px; background: #010409; overflow-x: auto; white-space: nowrap; }
     .tab-btn { padding: 12px 20px; font-size: 0.85rem; font-weight: 500; color: #8b949e; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color .15s, border-color .15s; }
     .tab-btn:hover { color: #e6edf3; }
     .tab-btn.active { color: #e6edf3; border-bottom-color: #1f6feb; }
@@ -85,16 +85,16 @@
 
 <header>
   <h1>SPX 0DTE EM Dashboard</h1>
-  <div class="tabs" style="border:none;padding:0;background:none;">
-    <button class="tab-btn active" onclick="switchTab('tab-overview',  this)">Overview</button>
-    <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
-    <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
-    <button class="tab-btn"        onclick="switchTab('tab-model',     this)">Prediction Model</button>
-    <button class="tab-btn"        onclick="switchTab('tab-model2',    this)">Prediction Model 2</button>
-    <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
-  </div>
   <span id="last-updated"></span>
 </header>
+<nav class="tabs">
+  <button class="tab-btn active" onclick="switchTab('tab-overview',  this)">Overview</button>
+  <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
+  <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
+  <button class="tab-btn"        onclick="switchTab('tab-model',     this)">Prediction Model</button>
+  <button class="tab-btn"        onclick="switchTab('tab-model2',    this)">Prediction Model 2</button>
+  <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
+</nav>
 
 <div id="status">Loading data…</div>
 
