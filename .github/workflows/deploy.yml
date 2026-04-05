@@ -33,6 +33,30 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      # ── Cache historical market data ────────────────────────────────────────
+      # Key rotates monthly so a full re-fetch happens automatically once/month.
+      # On cache hit the fetch scripts only pull the last ~7 days incrementally.
+      - name: Get current month (cache key)
+        id: month
+        run: echo "val=$(date +'%Y-%m')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore market data cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: data/
+          key: market-data-v1-${{ steps.month.outputs.val }}
+          restore-keys: |
+            market-data-v1-
+
+      - name: Set end_date to today in config.toml
+        run: |
+          TODAY=$(date +'%Y-%m-%d')
+          sed -i "s/^end_date.*=.*/end_date      = \"$TODAY\"/" config.toml
+          sed -i "s/^end_date   =.*/end_date   = \"$TODAY\"/" config.toml
+          grep end_date config.toml
+
+      # ── Fetch data (incremental on cache hit, full on cold start) ───────────
       - name: Fetch SPX + VIX data
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
@@ -43,6 +67,7 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/fetch_intraday.py
 
+      # ── Analysis + model training (always re-run on fresh data) ─────────────
       - name: Run patches analysis
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
@@ -63,14 +88,19 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/build_model2.py
 
+      # ── Save updated data back to cache ─────────────────────────────────────
+      # actions/cache saves automatically at job end when key matches or is new.
+      # No explicit save step needed — the cache action handles it.
+
+      # ── Deploy ───────────────────────────────────────────────────────────────
       - name: Copy data into dashboard
         run: |
-          cp data/spx_1min.csv dashboard/
+          cp data/spx_1min.csv            dashboard/
           cp data/spx_options_snapshot.csv dashboard/
-          cp data/patches_analysis.json dashboard/
-          cp data/reversal_analysis.json dashboard/
-          cp data/model_results.json dashboard/
-          cp data/model2_results.json dashboard/
+          cp data/patches_analysis.json   dashboard/
+          cp data/reversal_analysis.json  dashboard/
+          cp data/model_results.json      dashboard/
+          cp data/model2_results.json     dashboard/
 
       - uses: actions/configure-pages@v5
 
