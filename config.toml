@@ -3,14 +3,14 @@ base_url = "https://api.polygon.io"
 
 [data]
 ticker        = "I:SPX"
-start_date    = "2025-04-01"
-end_date      = "2026-04-01"
+start_date    = "2025-10-01"
+end_date      = "2026-04-06"
 options_limit = 250
 
 [vix]
 ticker     = "I:VIX"
-start_date = "2025-03-28"   # extra days for prev-day VIX on 2025-04-01
-end_date   = "2026-04-01"
+start_date = "2025-09-26"   # extra days for prev-day VIX on 2025-10-01
+end_date   = "2026-04-06"
 
 [analysis]
 lookback_mins = 5            # bars used to build patch boxes (9:31–9:35)
@@ -23,13 +23,13 @@ strike_rounding     = 25
 
 [spy]
 ticker     = "SPY"
-start_date = "2025-04-01"
-end_date   = "2026-04-01"
+start_date = "2025-10-01"
+end_date   = "2026-04-06"
 
 [vix_1min]
 ticker     = "I:VIX"
-start_date = "2025-04-01"
-end_date   = "2026-04-01"
+start_date = "2025-10-01"
+end_date   = "2026-04-06"
 
 [paths]
 data_dir      = "data"

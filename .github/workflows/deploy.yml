@@ -67,6 +67,11 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/fetch_intraday.py
 
+      - name: Compute VIX1D from ATM 0DTE straddles
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: PYTHONPATH=. uv run python scripts/fetch_vix1d.py
+
       # ── Analysis + model training (always re-run on fresh data) ─────────────
       - name: Run patches analysis
         env:

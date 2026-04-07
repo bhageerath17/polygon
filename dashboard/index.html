@@ -55,6 +55,15 @@
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 32px 28px; }
     @media(max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
     .panel { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 18px; }
+    .panel.scroll { max-height: 460px; overflow-y: auto; }
+    .panel.scroll::-webkit-scrollbar { width: 6px; }
+    .panel.scroll::-webkit-scrollbar-track { background: #0d1117; }
+    .panel.scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    .panel.scroll::-webkit-scrollbar-thumb:hover { background: #484f58; }
+    /* TradingView-style chart container */
+    .tv-chart { position: relative; touch-action: none; cursor: crosshair; }
+    .tv-chart .modebar { opacity: 0; transition: opacity 0.2s; }
+    .tv-chart:hover .modebar { opacity: 1; }
     .panel h3 { font-size: 0.78rem; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
     .stat-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #21262d; font-size: 0.83rem; }
     .stat-row:last-child { border-bottom: none; }
@@ -89,11 +98,11 @@
 </header>
 <nav class="tabs">
   <button class="tab-btn active" onclick="switchTab('tab-overview',  this)">Overview</button>
+  <button class="tab-btn"        onclick="switchTab('tab-model',     this)">Model 1</button>
+  <button class="tab-btn"        onclick="switchTab('tab-model2',    this)">Model 2</button>
+  <button class="tab-btn"        onclick="switchTab('tab-model3',    this)">Model 3</button>
   <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
   <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
-  <button class="tab-btn"        onclick="switchTab('tab-model',     this)">Prediction Model</button>
-  <button class="tab-btn"        onclick="switchTab('tab-model2',    this)">Prediction Model 2</button>
-  <button class="tab-btn"        onclick="switchTab('tab-model3',    this)">Model 3 (Holdout)</button>
   <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
 </nav>
 
@@ -119,14 +128,17 @@
 
     <h2>How the Expected Move is Calculated</h2>
     <p>
-      The <b>daily expected move (1σ)</b> for any given bar is:<br><br>
+      When <b>ATM 0DTE straddle data</b> is available, the daily expected move is derived directly
+      from the market-implied 1-day volatility (<b>VIX1D</b>):<br><br>
       <code style="background:#161b22;padding:6px 12px;border-radius:4px;font-size:0.9rem;color:#58a6ff;">
+        σ = ATM_call_mid + ATM_put_mid &nbsp; (straddle at open)
+      </code><br><br>
+      This captures the actual 1-day implied vol from 0DTE options prices — more accurate than
+      the 30-day VIX for daily expected moves. When straddle data is unavailable, the fallback is:<br><br>
+      <code style="background:#161b22;padding:6px 12px;border-radius:4px;font-size:0.85rem;color:#8b949e;">
         σ = open_price × (VIX / 100) / √252
       </code><br><br>
-      This is the same formula used in the Pine Script indicator
-      <i>"SPX 0DTE EM (Skewed VWAP + Midpoint)"</i>. VIX is annualised volatility — dividing
-      by √252 converts it to a single-day expected move. A <b>0.8σ</b> band is also drawn as a
-      tighter inner boundary.
+      A <b>0.8σ</b> band is also drawn as a tighter inner boundary.
     </p>
 
     <hr class="divider" />
@@ -268,7 +280,7 @@
   <!-- Confusion matrix + feature importance side by side -->
   <div class="two-col" style="padding-top:8px;">
     <div class="panel" id="confusion-panel"><h3>Confusion Matrix (LOOCV)</h3></div>
-    <div class="panel" id="feature-panel"><h3>Feature Importance (|coefficient|)</h3></div>
+    <div class="panel scroll" id="feature-panel"><h3>Feature Importance (|coefficient|)</h3></div>
   </div>
 
   <!-- Squeeze → probability lift -->
@@ -292,7 +304,7 @@
       Marker size ∝ model probability.
       &nbsp;<b style="color:#3fb950">Scroll</b> to zoom time · <b style="color:#3fb950">Drag</b> Y-axis to scale price.
     </p>
-    <div id="spx-plotly-chart" style="width:100%;height:480px;"></div>
+    <div id="spx-plotly-chart" class="tv-chart" style="width:100%;height:560px;"></div>
   </section>
 
   <!-- Per-event prediction table -->
@@ -308,6 +320,20 @@
           <th>Rev. Cat.</th><th>Squeeze</th><th>VIX</th>
           <th>Pred Prob</th><th>Prediction</th><th>Actual</th><th>Result</th>
         </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Feature Glossary -->
+  <section>
+    <h2>Feature Glossary</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:14px;">
+      All features computed at T = time_of_low from the lookback window [T-60 min, T]. No lookahead.
+    </p>
+    <div class="tbl-wrap" style="max-height:500px;overflow-y:auto;">
+      <table id="feature-glossary-table" style="font-size:0.76rem;">
+        <thead><tr><th style="width:30%">Feature</th><th>Group</th><th>Computation</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -332,7 +358,7 @@
   <!-- Confusion matrix + feature importance side by side -->
   <div class="two-col">
     <div class="panel" id="model2-confusion-panel"><h3>Confusion Matrix</h3></div>
-    <div class="panel" id="model2-feature-panel"><h3>Feature Importance</h3></div>
+    <div class="panel scroll" id="model2-feature-panel"><h3>Feature Importance</h3></div>
   </div>
 
   <!-- SPX 1-min candle chart with model2 predictions -->
@@ -345,7 +371,7 @@
       <span style="color:#e3b341">&#9670;</span> Predicted weak (no call made) &nbsp;·&nbsp;
       Marker size proportional to model probability.
     </p>
-    <div id="spx-plotly-chart2" style="width:100%;height:480px;"></div>
+    <div id="spx-plotly-chart2" class="tv-chart" style="width:100%;height:560px;"></div>
   </section>
 
   <!-- Per-event prediction table -->
@@ -379,7 +405,7 @@
   <!-- Train vs Holdout comparison -->
   <div class="two-col" style="padding-top:8px;">
     <div class="panel" id="model3-split-panel"><h3>Train vs Holdout Comparison</h3></div>
-    <div class="panel" id="model3-feature-panel"><h3>Top Features (30 selected)</h3></div>
+    <div class="panel scroll" id="model3-feature-panel"><h3>Top Features (30 selected)</h3></div>
   </div>
 
   <!-- Confusion matrix + VIX regime -->
@@ -397,7 +423,7 @@
       <span style="color:#f85149">&#9660; Miss</span> &nbsp;|&nbsp;
       <span style="color:#e3b341">&#9670;</span> Predicted weak
     </p>
-    <div id="spx-plotly-chart3" style="width:100%;height:480px;"></div>
+    <div id="spx-plotly-chart3" class="tv-chart" style="width:100%;height:560px;"></div>
   </section>
 
   <!-- Per-event prediction table -->
@@ -487,7 +513,7 @@
     <div class="tbl-wrap">
       <table id="daily-table">
         <thead><tr>
-          <th>Date</th><th>VIX</th><th>1σ Sig</th>
+          <th>Date</th><th>VIX</th><th>VIX1D</th><th>EM Src</th><th>1σ Sig</th>
           <th>Open</th><th>Close</th><th>Gap%</th><th>Gap Zone</th>
           <th>Breach ↑</th><th>Breach ↓</th><th>Close Zone</th>
         </tr></thead>
@@ -793,13 +819,15 @@ function loadTab3(s) {
     </div>`;
   }).join('');
 
-  document.querySelector('#daily-table tbody').innerHTML = (s.daily||[]).map(r => `
-    <tr><td>${r.date}</td><td>${fmt(r.vix_prev,1)}</td><td>${fmt(r.sig,1)}</td>
+  document.querySelector('#daily-table tbody').innerHTML = (s.daily||[]).map(r => {
+    const emSrc = r.em_source === 'straddle' ? badge('STR','up-z') : badge('VIX','neutral-z');
+    return `<tr><td>${r.date}</td><td>${fmt(r.vix_prev,1)}</td><td>${r.vix1d != null ? fmt(r.vix1d,1) : '—'}</td><td>${emSrc}</td><td>${fmt(r.sig,1)}</td>
     <td>${fmt(r.open,2)}</td><td>${fmt(r.close,2)}</td>
     <td class="${parseFloat(r.gap_pct)>0?'up':parseFloat(r.gap_pct)<0?'down':''}">${fmt(r.gap_pct,2)}%</td>
     <td><span class="badge ${parseFloat(r.gap_pct)>0?'call':'put'}" style="font-size:.7rem">${GAP_ZONE_LABELS[r.gap_zone]||r.gap_zone||'—'}</span></td>
     <td>${boolBadge(r.breach_above_1sig)}</td><td>${boolBadge(r.breach_below_1sig)}</td>
-    <td>${zoneBadge(r.close_zone)}</td></tr>`).join('');
+    <td>${zoneBadge(r.close_zone)}</td></tr>`;
+  }).join('');
 }
 
 /* ── TAB 3 — REVERSAL ANALYSIS ────────────────── */
@@ -998,47 +1026,135 @@ function loadModelTab(m, spxPrice) {
   const _val = f => Math.abs(f.importance ?? f.coefficient ?? 0);
   const maxCoef = Math.max(...fi.map(_val), 0.0001);
   const FEAT_LABELS = {
-    // Core
-    squeeze_encoded:    'Squeeze Strength',
-    vix_prev:           'Prior VIX',
-    hour_of_low:        'Hour of Low',
-    fall_pts:           'Fall Points',
-    fall_normalized:    'Fall / VIX',
-    is_monday:          'Is Monday',
-    is_friday:          'Is Friday',
-    // VIX momentum
-    vix_1d_change:      'VIX 1-Day Change',
-    vix_5d_change:      'VIX 5-Day Change',
-    vix_vs_20d:         'VIX vs 20d Avg',
-    vix_5d_avg:         'VIX 5-Day Avg',
-    vix_trend_up:       'VIX Trending Up',
-    vix_regime:         'VIX Regime (0-2)',
-    // Gap / opening
-    gap_pts:            'Gap Points',
-    gap_pct:            'Gap %',
-    gap_dir:            'Gap Direction',
-    open5_range:        'Opening 5-Min Range',
-    open5_dir:          'Opening 5-Min Direction',
-    spx_5d_ret:         'SPX 5-Day Return',
-    fall_speed:         'Fall Speed (pts/bar)',
-    pct_day_at_low:     'Day Elapsed at Low',
-    // Straddle
-    fall_vs_straddle:   'Fall / Straddle Proxy',
-    // Squeeze
-    squeeze_duration:   'Squeeze Duration (bars)',
-    expansion_ratio:    'Expansion / Min-Body Ratio',
-    // Calendar
-    is_tuesday:         'Is Tuesday',
-    is_wednesday:       'Is Wednesday',
-    dow_encoded:        'Day of Week',
-    minute_of_low:      'Minute of Low',
-    is_morning:         'Is Morning (<11am)',
-    is_afternoon:       'Is Afternoon (>1pm)',
-    // Interactions
-    vix_x_squeeze:      'VIX × Squeeze',
-    gap_dir_x_fall:     'Gap Dir × Fall',
-    vix_change_x_fall:  'VIX Δ × Fall',
+    // A — Price momentum
+    stretch_5: 'Stretch vs 5-EMA', stretch_10: 'Stretch vs 10-EMA', stretch_20: 'Stretch vs 20-EMA', stretch_60: 'Stretch vs 60-EMA',
+    ret_z_5: 'Return Z (5)', ret_z_10: 'Return Z (10)', ret_z_20: 'Return Z (20)', ret_z_60: 'Return Z (60)',
+    // B — Realized vol
+    rv_5: 'Realized Var (5)', rv_20: 'Realized Var (20)', rv_60: 'Realized Var (60)',
+    jump_share_5: 'Jump Share (5)', jump_share_20: 'Jump Share (20)', jump_share_60: 'Jump Share (60)',
+    down_sv_5: 'Down Semivar (5)', down_sv_20: 'Down Semivar (20)', down_sv_60: 'Down Semivar (60)',
+    range_vol_5: 'Range Vol (5)', range_vol_20: 'Range Vol (20)', range_vol_60: 'Range Vol (60)',
+    rv_spike: 'RV Spike (5/60)', autocorr_10: 'Autocorr (10)', autocorr_20: 'Autocorr (20)', autocorr_30: 'Autocorr (30)',
+    // C — Volume / order-flow
+    rel_vol_5: 'Rel Volume (5)', rel_vol_10: 'Rel Volume (10)', rel_vol_20: 'Rel Volume (20)', rel_vol_30: 'Rel Volume (30)',
+    signed_vol_imb_5: 'Vol Imbalance (5)', signed_vol_imb_10: 'Vol Imbalance (10)', signed_vol_imb_20: 'Vol Imbalance (20)', signed_vol_imb_30: 'Vol Imbalance (30)',
+    cvd_slope: 'CVD Slope',
+    // D — Candle / oscillators
+    lower_wick_ratio: 'Lower Wick Ratio', upper_wick_ratio: 'Upper Wick Ratio', body_to_range: 'Body / Range',
+    avg_body_range_5: 'Avg Body/Range (5)', avg_lower_wick_5: 'Avg Lower Wick (5)',
+    rsi_14: 'RSI (14)', stoch_k_14: 'Stochastic %K (14)',
+    bb_pct_b: 'Bollinger %B', bb_bandwidth: 'BB Bandwidth', bb_kc_squeeze: 'BB-KC Squeeze',
+    macd_hist: 'MACD Histogram',
+    trend_slope_20: 'Trend Slope (20)', trend_slope_60: 'Trend Slope (60)',
+    trend_curvature_20: 'Trend Curvature (20)', trend_curvature_60: 'Trend Curvature (60)',
+    // E — VIX intraday
+    vix_intraday: 'VIX Intraday', vix_z_60d: 'VIX Z-Score (60d)',
+    vix_chg_5m: 'VIX Chg (5m)', vix_chg_30m: 'VIX Chg (30m)', vix_accel: 'VIX Acceleration',
+    spx_vix_beta: 'SPX-VIX Beta',
+    // F — Market structure
+    vwap_dev: 'VWAP Deviation', dist_to_prev_close: 'Dist to Prev Close',
+    dist_to_open: 'Dist to Open', dist_to_day_high: 'Dist to Day High',
+    // G — Opening range / gap
+    gap_pts: 'Gap Points', gap_pct: 'Gap %', gap_dir: 'Gap Direction',
+    open5_range: 'Opening 5-Min Range', open5_dir: 'Opening 5-Min Direction',
+    fall_speed: 'Fall Speed (pts/bar)', pct_day_at_low: 'Day Elapsed at Low',
+    // H — Straddle / VIX1D
+    straddle_price: 'Straddle Price (EM)', vix1d: 'VIX1D (1-Day IV)',
+    fall_vs_straddle: 'Fall / Straddle', intraday_vrp: 'Intraday VRP',
+    // I — Squeeze / options
+    squeeze_encoded: 'Squeeze Strength', squeeze_duration: 'Squeeze Duration',
+    expansion_body: 'Expansion Body', squeeze_min_body: 'Squeeze Min Body',
+    expansion_ratio: 'Expansion Ratio', fall_pts: 'Fall Points',
+    vix_prev: 'Prior VIX', fall_normalized: 'Fall / VIX',
+    // J — VIX daily momentum
+    vix_1d_chg: 'VIX 1-Day Change', vix_5d_chg: 'VIX 5-Day Change',
+    vix_vs_20d: 'VIX vs 20d Avg', vix_trend_up: 'VIX Trending Up',
+    // K — Time of day
+    minute_of_low: 'Minute of Low', time_sin: 'Time Sin', time_cos: 'Time Cos',
+    is_morning: 'Is Morning (<11am)', is_afternoon: 'Is Afternoon (>1pm)',
+    is_open30: 'Is Open 30m', is_close30: 'Is Close 30m',
+    dow_encoded: 'Day of Week', is_monday: 'Is Monday', is_friday: 'Is Friday', is_tuesday: 'Is Tuesday',
+    hour_of_low: 'Hour of Low',
+    // L — Interactions
+    stretch_x_squeeze: 'Stretch × Squeeze', rv_spike_x_vol_imb: 'RV Spike × Vol Imbalance',
+    vix_chg_x_fall_norm: 'VIX Chg × Fall', gap_dir_x_fall: 'Gap Dir × Fall',
+    autocorr_x_stretch: 'Autocorr × Stretch', lower_wick_x_rv_spike: 'Lower Wick × RV Spike',
   };
+
+  const FEAT_GLOSSARY = [
+    // A — Price momentum
+    { feat:'stretch_{w}', grp:'A: Momentum', desc:'(close − EMA_w) / (√RV_w × close). How far price is from its w-bar EMA, normalised by realised vol. Negative = oversold.' },
+    { feat:'ret_z_{w}', grp:'A: Momentum', desc:'Log-return over w bars, z-scored vs mean/std of 1-bar returns in that window. Extreme negative = sharp drawdown.' },
+    // B — Realized vol
+    { feat:'rv_{w}', grp:'B: Volatility', desc:'Sum of squared 1-min log-returns over w bars. Raw realised variance at the intraday level.' },
+    { feat:'jump_share_{w}', grp:'B: Volatility', desc:'max(RV − BV, 0) / RV. Fraction of variance from jumps (not diffusion). High = discontinuous moves.' },
+    { feat:'down_sv_{w}', grp:'B: Volatility', desc:'Sum of squared negative returns / total RV. >0.5 means downside vol dominates.' },
+    { feat:'range_vol_{w}', grp:'B: Volatility', desc:'Mean of ln(high/low) over w bars. Parkinson-style range-based volatility estimator.' },
+    { feat:'rv_spike', grp:'B: Volatility', desc:'RV_5 / RV_60. Recent short-term vol vs longer baseline. >1 = vol spike in progress.' },
+    { feat:'autocorr_{w}', grp:'B: Volatility', desc:'Lag-1 autocorrelation of 1-min returns over w bars. Negative = mean-reverting (supports bounce).' },
+    // C — Volume
+    { feat:'rel_vol_{w}', grp:'C: Volume', desc:'Mean SPY volume over w bars / median expected volume for that time-of-day. >1 = above-average participation.' },
+    { feat:'signed_vol_imb_{w}', grp:'C: Volume', desc:'Σ(sign(ΔP) × V) / Σ(V) over w bars. +1 = all volume on upticks, −1 = all on downticks.' },
+    { feat:'cvd_slope', grp:'C: Volume', desc:'OLS slope of cumulative volume delta (last 30 bars), normalised. Positive = buying pressure building.' },
+    // D — Candle / oscillators
+    { feat:'lower_wick_ratio', grp:'D: Candles', desc:'(min(O,C) − low) / range of the last bar. High = bullish rejection wick.' },
+    { feat:'upper_wick_ratio', grp:'D: Candles', desc:'(high − max(O,C)) / range of the last bar. High = bearish rejection.' },
+    { feat:'body_to_range', grp:'D: Candles', desc:'|C − O| / (H − L). Low = doji / indecision, high = strong directional bar.' },
+    { feat:'rsi_14', grp:'D: Oscillators', desc:'Wilder RSI over 14 bars. <30 = oversold, >70 = overbought.' },
+    { feat:'stoch_k_14', grp:'D: Oscillators', desc:'Stochastic %K = (C − L14) / (H14 − L14) × 100. <20 = near 14-bar low.' },
+    { feat:'bb_pct_b', grp:'D: Oscillators', desc:'Bollinger %B = (C − lower_band) / bandwidth. <0 = below lower BB.' },
+    { feat:'bb_bandwidth', grp:'D: Oscillators', desc:'(upper − lower) / mean over 20 bars. Narrow = consolidation squeeze.' },
+    { feat:'bb_kc_squeeze', grp:'D: Oscillators', desc:'1 if Bollinger Bands are inside Keltner Channels (volatility squeeze), else 0.' },
+    { feat:'macd_hist', grp:'D: Oscillators', desc:'MACD(12,26) − Signal(9) histogram. Negative = bearish momentum.' },
+    { feat:'trend_slope_{w}', grp:'D: Oscillators', desc:'OLS slope of log-prices over w bars. Negative = downtrend.' },
+    { feat:'trend_curvature_{w}', grp:'D: Oscillators', desc:'2nd-order coefficient of quadratic fit to log-prices. Positive during down = concave up (deceleration).' },
+    // E — VIX intraday
+    { feat:'vix_intraday', grp:'E: VIX Intra', desc:'Last 1-min VIX close at time T. Raw fear gauge level.' },
+    { feat:'vix_z_60d', grp:'E: VIX Intra', desc:'(VIX_now − mean_60d) / std_60d. How elevated VIX is vs its 60-day daily history.' },
+    { feat:'vix_chg_5m / 30m', grp:'E: VIX Intra', desc:'VIX change over last 5 or 30 minutes. Spike = fear entering market.' },
+    { feat:'vix_accel', grp:'E: VIX Intra', desc:'2nd derivative of VIX: (Δ_t − Δ_{t-1}). Positive = VIX accelerating upward.' },
+    { feat:'spx_vix_beta', grp:'E: VIX Intra', desc:'ΔVIX / |ΔSPX| over 5 bars. Leverage effect — how much fear per unit price drop.' },
+    // F — Market structure
+    { feat:'vwap_dev', grp:'F: Structure', desc:'(price − session_VWAP) / VWAP. Negative = trading below institutional avg fill.' },
+    { feat:'dist_to_prev_close', grp:'F: Structure', desc:'(price − prev_close) / prev_close. Gap persistence measure.' },
+    { feat:'dist_to_open', grp:'F: Structure', desc:'(price − day_open) / open. How far below the open.' },
+    { feat:'dist_to_day_high', grp:'F: Structure', desc:'(day_high − price) / price. Distance from intraday top.' },
+    // G — Opening / gap
+    { feat:'gap_pts / gap_pct', grp:'G: Gap', desc:'Opening gap in points or %. Positive = gap up from prev close.' },
+    { feat:'gap_dir', grp:'G: Gap', desc:'+1 if gap > 0.5 pts, −1 if < −0.5, else 0.' },
+    { feat:'open5_range', grp:'G: Gap', desc:'High − Low of first 5 bars (9:30–9:34). Wide = volatile open.' },
+    { feat:'fall_speed', grp:'G: Gap', desc:'fall_pts / bars_elapsed. Points per minute of the drawdown.' },
+    { feat:'pct_day_at_low', grp:'G: Gap', desc:'Bars elapsed / total RTH bars. Early low = more time to recover.' },
+    // H — Straddle
+    { feat:'straddle_price', grp:'H: Options', desc:'ATM 0DTE call+put mid-price at open (from VIX1D). Fallback: SPX × VIX / 100 / √252.' },
+    { feat:'vix1d', grp:'H: Options', desc:'Market-implied 1-day annualised vol = (straddle / SPX) × √252 × 100. Falls back to VIX intraday.' },
+    { feat:'fall_vs_straddle', grp:'H: Options', desc:'fall_pts / straddle_price. How many expected moves the fall represents. >1 = exceeded EM.' },
+    { feat:'intraday_vrp', grp:'H: Options', desc:'IV² − annualised RV_20. Positive = implied > realised (vol premium intact).' },
+    // I — Squeeze
+    { feat:'squeeze_encoded', grp:'I: Squeeze', desc:'ATM call body compression: 0=none, 1=mild, 2=moderate, 3=strong. Detected in 20 bars pre-low.' },
+    { feat:'squeeze_duration', grp:'I: Squeeze', desc:'Consecutive bars of declining rolling-max body size. Longer = tighter coil.' },
+    { feat:'expansion_ratio', grp:'I: Squeeze', desc:'First post-low candle body / min body during squeeze. >2 = strong expansion breakout.' },
+    { feat:'fall_pts', grp:'I: Squeeze', desc:'Swing high − swing low in SPX points. Raw drawdown magnitude.' },
+    { feat:'fall_normalized', grp:'I: Squeeze', desc:'fall_pts / VIX_prev. Fall size relative to expected vol regime.' },
+    // J — VIX daily
+    { feat:'vix_1d_chg', grp:'J: VIX Daily', desc:'Yesterday\'s VIX close − day-before. Positive = fear rising.' },
+    { feat:'vix_5d_chg', grp:'J: VIX Daily', desc:'VIX change over 5 trading days. Trend in fear.' },
+    { feat:'vix_vs_20d', grp:'J: VIX Daily', desc:'VIX − 20-day mean. Positive = elevated vs recent history.' },
+    { feat:'vix_trend_up', grp:'J: VIX Daily', desc:'1 if vix_5d_chg > 0. Binary trending-fear flag.' },
+    // K — Time
+    { feat:'minute_of_low', grp:'K: Time', desc:'Minute-of-day (570=9:30). Early lows have more recovery runway.' },
+    { feat:'time_sin / time_cos', grp:'K: Time', desc:'Sine/cosine encoding of time within RTH. Captures cyclic intraday patterns.' },
+    { feat:'is_morning', grp:'K: Time', desc:'1 if hour < 11. Morning reversals tend to be stronger.' },
+    { feat:'is_open30 / is_close30', grp:'K: Time', desc:'1 if within first/last 30 min of RTH. High-volume windows.' },
+    { feat:'dow_encoded', grp:'K: Time', desc:'Mon=0, Tue=1, ... Fri=4. Captures day-of-week effects.' },
+    // L — Interactions
+    { feat:'stretch_x_squeeze', grp:'L: Interaction', desc:'stretch_20 × squeeze_encoded. Oversold + coiled = strongest reversal signal.' },
+    { feat:'rv_spike_x_vol_imb', grp:'L: Interaction', desc:'rv_spike × signed_vol_imb_10. Vol spike with buying = capitulation exhaust.' },
+    { feat:'vix_chg_x_fall_norm', grp:'L: Interaction', desc:'vix_chg_30m × fall_normalized. Rising VIX during big fall = fear peak.' },
+    { feat:'gap_dir_x_fall', grp:'L: Interaction', desc:'gap_dir × fall_normalized. Gap-down + large fall = more oversold.' },
+    { feat:'autocorr_x_stretch', grp:'L: Interaction', desc:'autocorr_20 × stretch_20. Mean-reverting + oversold = buy signal.' },
+    { feat:'lower_wick_x_rv_spike', grp:'L: Interaction', desc:'lower_wick_ratio × rv_spike. Rejection wick during vol spike = capitulation.' },
+  ];
   document.getElementById('feature-panel').innerHTML = `<h3>Feature Importance (|coefficient|)</h3>` +
     fi.map(f => {
       const val = _val(f);
@@ -1095,6 +1211,21 @@ function loadModelTab(m, spxPrice) {
       <td style="color:${hitCls};font-weight:600">${hitIcon}</td>
     </tr>`;
   }).join('');
+
+  // Feature glossary
+  const glossaryEl = document.querySelector('#feature-glossary-table tbody');
+  if (glossaryEl) {
+    const grpColors = { 'A':'#58a6ff','B':'#f0883e','C':'#3fb950','D':'#d2a8ff','E':'#e3b341',
+      'F':'#8b949e','G':'#79c0ff','H':'#56d364','I':'#ff7b72','J':'#ffa657','K':'#c9d1d9','L':'#d186eb' };
+    glossaryEl.innerHTML = FEAT_GLOSSARY.map(g => {
+      const gc = grpColors[g.grp[0]] || '#8b949e';
+      return `<tr>
+        <td style="font-weight:600;color:#e6edf3;font-family:monospace;font-size:0.73rem;">${g.feat}</td>
+        <td><span class="badge" style="background:${gc}22;color:${gc};font-size:0.68rem;">${g.grp}</span></td>
+        <td style="color:#8b949e;line-height:1.5;">${g.desc}</td>
+      </tr>`;
+    }).join('');
+  }
 }
 
 function drawSPXPlotly(spxPrice, eventPredictions) {
@@ -1276,7 +1407,7 @@ function drawSPXPlotly(spxPrice, eventPredictions) {
     xaxis: {
       type:         'category',
       rangeslider:  { visible: false },
-      fixedrange:   false,           // ← drag x-axis to pan/zoom time
+      fixedrange:   false,
       showgrid:     true,
       gridcolor:    '#1e2530',
       gridwidth:    1,
@@ -1286,11 +1417,15 @@ function drawSPXPlotly(spxPrice, eventPredictions) {
       showline:     true,
       linecolor:    '#30363d',
       zeroline:     false,
-      // Show only HH:MM labels (strip the date prefix)
       tickformat:   '',
+      showspikes:   true,
+      spikecolor:   '#58a6ff',
+      spikethickness: 0.5,
+      spikedash:    'dot',
+      spikemode:    'across',
     },
     yaxis: {
-      fixedrange:   false,           // ← drag y-axis to scale price
+      fixedrange:   false,
       showgrid:     true,
       gridcolor:    '#1e2530',
       tickfont:     { size: 10, color: '#8b949e' },
@@ -1299,12 +1434,17 @@ function drawSPXPlotly(spxPrice, eventPredictions) {
       linecolor:    '#30363d',
       zeroline:     false,
       autorange:    true,
+      showspikes:   true,
+      spikecolor:   '#58a6ff',
+      spikethickness: 0.5,
+      spikedash:    'dot',
+      spikemode:    'across',
     },
     margin:    { l: 4, r: 64, t: 36, b: 56 },
     shapes,
     annotations,
-    hovermode:  'closest',
-    dragmode:   'pan',               // ← pan by drag (like TradingView default)
+    hovermode:  'x unified',
+    dragmode:   'pan',
     hoverlabel: {
       bgcolor:    '#161b22',
       bordercolor:'#30363d',
@@ -1671,11 +1811,13 @@ function drawSPXPlotly2(spxPrice, eventPredictions) {
     xaxis:{ type:'category', rangeslider:{visible:false}, fixedrange:false, showgrid:true,
       gridcolor:'#1e2530', tickfont:{size:9,color:'#8b949e'}, tickangle:-45, nticks:18,
       showline:true, linecolor:'#30363d', zeroline:false,
-      tickvals:tickData.tickvals, ticktext:tickData.ticktext },
+      tickvals:tickData.tickvals, ticktext:tickData.ticktext,
+      showspikes:true, spikecolor:'#58a6ff', spikethickness:0.5, spikedash:'dot', spikemode:'across' },
     yaxis:{ fixedrange:false, showgrid:true, gridcolor:'#1e2530', tickfont:{size:10,color:'#8b949e'},
-      side:'right', showline:true, linecolor:'#30363d', zeroline:false, autorange:true },
+      side:'right', showline:true, linecolor:'#30363d', zeroline:false, autorange:true,
+      showspikes:true, spikecolor:'#58a6ff', spikethickness:0.5, spikedash:'dot', spikemode:'across' },
     margin:{l:4,r:64,t:36,b:56}, shapes, annotations,
-    hovermode:'closest', dragmode:'pan',
+    hovermode:'x unified', dragmode:'pan',
     hoverlabel:{bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}},
     legend:{x:0.01,y:0.98,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}},
   }, { responsive:true, scrollZoom:true, displayModeBar:true,
@@ -1856,8 +1998,11 @@ function drawSPXPlotlyModel3(spxPrice, preds) {
   Plotly.newPlot(el, traces, {
     paper_bgcolor:'transparent', plot_bgcolor:'transparent',
     font:{color:'#e6edf3',size:11}, margin:{l:60,r:20,t:10,b:40},
-    xaxis:{type:'date',rangeslider:{visible:false},gridcolor:'#21262d'},
-    yaxis:{gridcolor:'#21262d',title:'SPX'},
+    xaxis:{type:'date',rangeslider:{visible:false},gridcolor:'#21262d',fixedrange:false,
+      showspikes:true,spikecolor:'#58a6ff',spikethickness:0.5,spikedash:'dot',spikemode:'across'},
+    yaxis:{gridcolor:'#21262d',title:'SPX',fixedrange:false,
+      showspikes:true,spikecolor:'#58a6ff',spikethickness:0.5,spikedash:'dot',spikemode:'across'},
+    hovermode:'x unified',dragmode:'pan',
     legend:{x:0.01,y:0.98,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}},
   }, { responsive:true, scrollZoom:true, displayModeBar:true,
     modeBarButtonsToRemove:['lasso2d','select2d','toggleSpikelines'],
@@ -1891,6 +2036,14 @@ async function init() {
 }
 
 init();
+
+/* ── TradingView-style scroll capture ──────────────────────────────────────
+   Prevent page scroll when cursor is over any chart — let Plotly handle zoom.
+   Also adds keyboard shortcuts: +/- to zoom, arrow keys to pan. */
+document.querySelectorAll('.tv-chart').forEach(el => {
+  el.addEventListener('wheel', e => { e.preventDefault(); }, { passive: false });
+  el.addEventListener('mouseenter', () => { el.style.cursor = 'crosshair'; });
+});
 </script>
 </body>
 </html>
