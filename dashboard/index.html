@@ -2229,7 +2229,7 @@ function loadModel3Tab(m, spxPrice) {
   const fi = m.feature_importance || [];
   const maxImp = fi.length ? fi[0].importance : 1;
   document.getElementById('model3-feature-panel').innerHTML = `<h3>Top Features (${m.n_features_selected} selected)</h3>` +
-    fi.slice(0, 15).map(f => {
+    fi.map(f => {
       const w = Math.max(2, (f.importance / maxImp * 100));
       return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
         <span style="font-size:0.73rem;width:170px;text-align:right;flex-shrink:0;">${f.feature}</span>
@@ -2295,60 +2295,168 @@ function loadModel3Tab(m, spxPrice) {
 }
 
 function drawSPXPlotlyModel3(spxPrice, preds) {
-  // Reuse same chart logic as model1/2 but for model3 holdout predictions
-  const lastDates = [...new Set(spxPrice.map(r => {
-    const d = r.datetime || r[Object.keys(r)[0]] || '';
-    return d.slice(0, 10);
-  }))].sort().slice(-7);
+  const el = document.getElementById('spx-plotly-chart3');
+  if (!el || typeof Plotly === 'undefined') return;
 
-  const filtered = spxPrice.filter(r => {
-    const d = (r.datetime || r[Object.keys(r)[0]] || '').slice(0, 10);
-    return lastDates.includes(d);
+  // ── 1. Build 1-min RTH candles, last 7 trading days (same as Model 1) ─────
+  const allCandles = [];
+  spxPrice.forEach(r => {
+    const raw = r.datetime || r.date || '';
+    if (!raw) return;
+    const datePart = raw.slice(0, 10);
+    const timePart = raw.slice(11, 16);
+    if (!timePart || timePart.length < 5) return;
+    const [hh, mm] = timePart.split(':').map(Number);
+    const totalMin = hh * 60 + mm;
+    if (totalMin < 9 * 60 + 30 || totalMin >= 16 * 60) return;
+    const o = parseFloat(r.open), h = parseFloat(r.high);
+    const l = parseFloat(r.low),  c = parseFloat(r.close);
+    if (isNaN(o) || isNaN(c)) return;
+    allCandles.push({ t: `${datePart}T${timePart}`, date: datePart, o, h, l, c });
   });
+  allCandles.sort((a, b) => (a.t < b.t ? -1 : 1));
 
-  if (!filtered.length) return;
+  const uniqueDays = [...new Set(allCandles.map(c => c.date))];
+  const last7days  = new Set(uniqueDays.slice(-7));
+  const candles    = allCandles.filter(c => last7days.has(c.date));
 
-  const dt = filtered.map(r => r.datetime || r[Object.keys(r)[0]]);
-  const op = filtered.map(r => parseFloat(r.open));
-  const hi = filtered.map(r => parseFloat(r.high));
-  const lo = filtered.map(r => parseFloat(r.low));
-  const cl = filtered.map(r => parseFloat(r.close));
-
-  const candle = { x:dt, open:op, high:hi, low:lo, close:cl, type:'candlestick',
-    name:'SPX', increasing:{line:{color:'#3fb950'}}, decreasing:{line:{color:'#f85149'}} };
-
-  const traces = [candle];
-
-  // Prediction markers
-  const predDates = new Set(lastDates);
-  const relevantPreds = preds.filter(p => predDates.has(p.date));
-  if (relevantPreds.length) {
-    const mx = relevantPreds.map(p => p.date + 'T' + (p.time_of_low||'12:00:00').slice(0,8));
-    const my = relevantPreds.map(p => {
-      const row = filtered.find(r => (r.datetime||'').startsWith(p.date + 'T' + (p.time_of_low||'12:00').slice(0,5)));
-      return row ? parseFloat(row.low) - 2 : null;
-    });
-    const mc = relevantPreds.map(p => p.hit ? '#3fb950' : (p.pred_significant ? '#f85149' : '#e3b341'));
-    const ms = relevantPreds.map(p => 8 + p.pred_prob_significant * 14);
-    const sym = relevantPreds.map(p => p.pred_significant ? (p.hit ? 'triangle-up' : 'triangle-down') : 'diamond');
-    traces.push({ x:mx, y:my, mode:'markers', marker:{color:mc,size:ms,symbol:sym},
-      name:'Model 3 Holdout', text:relevantPreds.map(p => `${p.date} ${(p.time_of_low||'').slice(0,5)} prob=${(p.pred_prob_significant*100).toFixed(0)}%`),
-      hoverinfo:'text' });
+  if (!candles.length) {
+    el.innerHTML = '<p style="color:#8b949e;padding:20px;">No 1-min price data for this window.</p>';
+    return;
   }
 
-  const el = document.getElementById('spx-plotly-chart3');
-  Plotly.newPlot(el, traces, {
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
-    font:{color:'#e6edf3',size:11}, margin:{l:60,r:20,t:10,b:40},
-    xaxis:{type:'date',rangeslider:{visible:false},gridcolor:'#21262d',fixedrange:false,
-      showspikes:true,spikecolor:'#58a6ff',spikethickness:0.5,spikedash:'dot',spikemode:'across'},
-    yaxis:{gridcolor:'#21262d',title:'SPX',fixedrange:false,
-      showspikes:true,spikecolor:'#58a6ff',spikethickness:0.5,spikedash:'dot',spikemode:'across'},
-    hovermode:'x unified',dragmode:'pan',
-    legend:{x:0.01,y:0.98,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}},
-  }, { responsive:true, scrollZoom:true, displayModeBar:true,
-    modeBarButtonsToRemove:['lasso2d','select2d','toggleSpikelines'],
-    modeBarButtonsToAdd:['resetScale2d'] });
+  // Build index map for O(1) exact lookup
+  const candleIdx = {};
+  candles.forEach((c, i) => { candleIdx[c.t] = i; });
+
+  const xs  = candles.map(c => c.t);
+  const ops = candles.map(c => c.o);
+  const his = candles.map(c => c.h);
+  const los = candles.map(c => c.l);
+  const cls = candles.map(c => c.c);
+
+  // ── 2. Prediction markers — pin to EXACT time_of_low 1-min candle ─────────
+  const shapes = [];
+  const markerX = [], markerY = [], markerColors = [], markerSizes = [];
+  const markerSymbols = [], hoverTexts = [];
+
+  preds.forEach(ev => {
+    if (!last7days.has(ev.date)) return;
+    const lowHHMM = (ev.time_of_low || '12:00:00').slice(0, 5);
+    const exactKey = `${ev.date}T${lowHHMM}`;
+
+    // Exact match first; if not found walk +/- 2 bars
+    let candleKey = exactKey;
+    if (candleIdx[candleKey] === undefined) {
+      const [h2, m2] = lowHHMM.split(':').map(Number);
+      for (let delta = 1; delta <= 2; delta++) {
+        for (const sign of [-1, 1]) {
+          const adj  = m2 + sign * delta;
+          const adjH = h2 + Math.floor(adj / 60);
+          const adjM = ((adj % 60) + 60) % 60;
+          const k2   = `${ev.date}T${String(adjH).padStart(2,'0')}:${String(adjM).padStart(2,'0')}`;
+          if (candleIdx[k2] !== undefined) { candleKey = k2; break; }
+        }
+        if (candleIdx[candleKey] !== undefined) break;
+      }
+    }
+    if (candleIdx[candleKey] === undefined) return;
+
+    const candle = candles[candleIdx[candleKey]];
+    const prob   = ev.pred_prob_significant || 0;
+    const isSig  = ev.pred_significant;
+    const isHit  = ev.hit;
+
+    const color  = isSig ? (isHit ? '#3fb950' : '#f85149') : '#e3b341';
+    const symbol = isSig ? (isHit ? 'triangle-up' : 'triangle-down') : 'diamond';
+    const size   = 14 + prob * 18;
+
+    // Vertical highlight shape on the exact candle column
+    shapes.push({
+      type: 'rect', x0: candleKey, x1: candleKey,
+      y0: 0, y1: 1, yref: 'paper',
+      line: { color, width: 2 }, fillcolor: color + '22', layer: 'below',
+    });
+
+    markerX.push(candleKey);
+    markerY.push(candle.l - (candle.h - candle.l) * 0.4);
+    markerColors.push(color);
+    markerSizes.push(size);
+    markerSymbols.push(symbol);
+    hoverTexts.push(
+      `<b>${ev.date}  ${lowHHMM}</b><br>` +
+      `Model prob: <b style="color:${color}">${(prob*100).toFixed(1)}%</b><br>` +
+      `Prediction: <b>${isSig ? 'REVERSAL' : 'Weak'}</b><br>` +
+      `Actual: <b>${ev.actual_significant ? 'REVERSAL' : 'Weak'}</b><br>` +
+      `Result: <b>${isHit ? 'Hit' : 'Miss'}</b><br>` +
+      `Fall: ${(+ev.fall_pts).toFixed(1)} pts  Recovery: ${(+ev.reversal_pts).toFixed(1)} pts`
+    );
+  });
+
+  // Day boundary lines
+  const dayList = [...last7days].sort();
+  dayList.forEach(d => {
+    const key = `${d}T09:30`;
+    if (candleIdx[key] !== undefined) {
+      shapes.push({
+        type: 'line', x0: key, x1: key, y0: 0, y1: 1, yref: 'paper',
+        line: { color: '#30363d', width: 1, dash: 'dot' }, layer: 'above',
+      });
+    }
+  });
+
+  const annotations = dayList.map(d => {
+    const key35 = `${d}T09:35`;
+    return {
+      x: candleIdx[key35] !== undefined ? key35 : `${d}T09:30`,
+      y: 1.03, yref: 'paper',
+      text: new Date(d + 'T12:00:00').toLocaleDateString('en-US',
+        { weekday: 'short', month: 'short', day: 'numeric' }),
+      showarrow: false, font: { size: 10, color: '#8b949e' }, xanchor: 'left',
+    };
+  });
+
+  // ── 3. Traces ─────────────────────────────────────────────────────────────
+  const candleTrace = {
+    type: 'candlestick', name: 'SPX 1-min',
+    x: xs, open: ops, high: his, low: los, close: cls,
+    increasing: { line: { color: '#26a641', width: 1 }, fillcolor: '#26a641' },
+    decreasing: { line: { color: '#da3633', width: 1 }, fillcolor: '#da3633' },
+    whiskerwidth: 0.3,
+    hovertemplate: '<b>%{x}</b><br>O: %{open:.2f}  H: %{high:.2f}  L: %{low:.2f}  C: %{close:.2f}<extra></extra>',
+  };
+
+  const predTrace = {
+    type: 'scatter', name: 'Model 3 Holdout',
+    x: markerX, y: markerY, mode: 'markers',
+    marker: { symbol: markerSymbols, size: markerSizes, color: markerColors,
+      opacity: 0.95, line: { width: 1.5, color: markerColors } },
+    text: hoverTexts, hoverinfo: 'text', showlegend: true,
+  };
+
+  Plotly.newPlot(el, [candleTrace, predTrace], {
+    paper_bgcolor: '#0d1117', plot_bgcolor: '#0d1117',
+    font: { color: '#e6edf3', size: 11, family: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+    xaxis: {
+      type: 'category', rangeslider: { visible: false }, fixedrange: false,
+      showgrid: true, gridcolor: '#1e2530', gridwidth: 1,
+      tickfont: { size: 9, color: '#8b949e' }, tickangle: -45, nticks: 18,
+      showline: true, linecolor: '#30363d', zeroline: false,
+      showspikes: true, spikecolor: '#58a6ff', spikethickness: 0.5, spikedash: 'dot', spikemode: 'across',
+    },
+    yaxis: {
+      fixedrange: false, showgrid: true, gridcolor: '#1e2530',
+      tickfont: { size: 10, color: '#8b949e' }, side: 'right',
+      showline: true, linecolor: '#30363d', zeroline: false, autorange: true,
+      showspikes: true, spikecolor: '#58a6ff', spikethickness: 0.5, spikedash: 'dot', spikemode: 'across',
+    },
+    margin: { l: 4, r: 64, t: 36, b: 56 }, shapes, annotations,
+    hovermode: 'x unified', dragmode: 'pan',
+    hoverlabel: { bgcolor: '#161b22', bordercolor: '#30363d', font: { size: 12, color: '#e6edf3' } },
+    legend: { x: 0.01, y: 0.98, bgcolor: '#161b2299', bordercolor: '#30363d', borderwidth: 1, font: { size: 10 } },
+  }, { responsive: true, scrollZoom: true, displayModeBar: true,
+    modeBarButtonsToRemove: ['lasso2d','select2d','toggleSpikelines'],
+    modeBarButtonsToAdd: ['resetScale2d'] });
 }
 
 /* ── INIT ─────────────────────────────────────── */
