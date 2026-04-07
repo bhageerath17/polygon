@@ -14,7 +14,8 @@ from app.io import save_csv
 
 def main() -> None:
     print("Loading SPX 1-min data...")
-    spx = pd.read_csv(settings.price_csv, index_col="datetime", parse_dates=True)
+    spx = pd.read_csv(settings.price_csv, index_col="datetime")
+    spx.index = pd.to_datetime(spx.index)
     print(f"  {len(spx):,} bars, {len(set(spx.index.date)):,} trading days\n")
 
     print("Computing VIX1D from ATM 0DTE straddles...")

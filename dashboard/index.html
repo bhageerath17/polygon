@@ -104,6 +104,7 @@
   <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
   <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
   <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
+  <button class="tab-btn"        onclick="switchTab('tab-glossary',  this)">Glossary</button>
 </nav>
 
 <div id="status">Loading data…</div>
@@ -518,6 +519,347 @@
           <th>Breach ↑</th><th>Breach ↓</th><th>Close Zone</th>
         </tr></thead>
         <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- ════════════════════════════════════════════════
+     TAB 8 — GLOSSARY
+════════════════════════════════════════════════ -->
+<div id="tab-glossary" class="tab-panel">
+
+  <section>
+    <h2>Glossary — Features, Metrics &amp; Definitions</h2>
+    <p style="font-size:0.78rem;color:#8b949e;margin-bottom:16px;">
+      Complete reference for every feature, metric, and term used across the dashboard.
+      All features are computed at <strong>T = time_of_low</strong> from the lookback window [T−60 min, T] with <strong>no lookahead</strong>.
+    </p>
+  </section>
+
+  <!-- A: Price Momentum -->
+  <section>
+    <h3 style="color:#58a6ff;">A — Price Momentum / Overextension vs Moving Average</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>stretch_{w}</code> (w=5,10,20,60)</td><td>(last_price − EMA_w) / (RV_std × last_price). Deviation from exponential moving average normalized by realized volatility.</td></tr>
+          <tr><td><code>ret_z_{w}</code> (w=5,10,20,60)</td><td>(cumulative_log_return − mean) / (std × √w). Standardized return z-score over w bars.</td></tr>
+          <tr><td><code>stretch_x_squeeze</code></td><td>stretch_20 × squeeze_encoded. Interaction: overextension during volatility compression.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- B: Realized Variance -->
+  <section>
+    <h3 style="color:#58a6ff;">B — Realized Variance, Jump Proxy, Semivariance</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>rv_{w}</code> (w=5,20,60)</td><td>Σ(log_return²) over w bars. Annualized: rv × 252 × 390. Measure of true intraday volatility.</td></tr>
+          <tr><td><code>bv_{w}</code> (w=5,20,60)</td><td>(√(2/π))⁻² × Σ(|ret_t| × |ret_{t−1}|). Bipower variance — robust to jumps, captures continuous vol only.</td></tr>
+          <tr><td><code>jump_share_{w}</code> (w=5,20,60)</td><td>max(RV − BV, 0) / RV. Fraction of variance attributable to jumps. 0 = continuous, 1 = all jumps.</td></tr>
+          <tr><td><code>down_sv_{w}</code> (w=5,20,60)</td><td>Σ(negative_returns²) / RV. Downside semivariance ratio. &gt;0.5 = downside-biased volatility.</td></tr>
+          <tr><td><code>range_vol_{w}</code> (w=5,20,60)</td><td>mean(log(high/low)). Parkinson-style range volatility from intraday high-low bars.</td></tr>
+          <tr><td><code>rv_spike</code></td><td>rv_5 / rv_60. Recent 5-bar RV relative to 60-bar baseline. &gt;1 = volatility spike.</td></tr>
+          <tr><td><code>autocorr_{w}</code> (w=10,20,30)</td><td>Lag-1 autocorrelation of log returns. Negative = mean reversion tendency.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- C: Volume -->
+  <section>
+    <h3 style="color:#58a6ff;">C — Volume / Order-Flow Proxies (SPY-derived)</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>rel_vol_{w}</code> (w=5,10,20,30)</td><td>mean(volume_w) / time_of_day_baseline_volume. Compares current volume to historical median for this minute-of-day.</td></tr>
+          <tr><td><code>signed_vol_imb_{w}</code> (w=5,10,20,30)</td><td>Σ(sign(Δprice) × volume) / Σ(volume). Range [−1, +1]: −1 = all sell, +1 = all buy.</td></tr>
+          <tr><td><code>cvd_slope</code></td><td>Slope of OLS on cumulative signed volume delta (30 bars), normalized by mean |CVD|. Positive = accumulation.</td></tr>
+          <tr><td><code>rv_spike_x_vol_imb</code></td><td>rv_spike × signed_vol_imb_10. Interaction: volatility spike with directional volume imbalance.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- D: Candle Patterns + Oscillators -->
+  <section>
+    <h3 style="color:#58a6ff;">D — Candle Patterns + Technical Oscillators</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>lower_wick_ratio</code></td><td>(min(open, close) − low) / range. Bullish rejection signal: 0 = no wick, 1 = all wick.</td></tr>
+          <tr><td><code>upper_wick_ratio</code></td><td>(high − max(open, close)) / range. Bearish rejection signal.</td></tr>
+          <tr><td><code>body_to_range</code></td><td>|close − open| / range. Low = doji/indecision, high = strong conviction.</td></tr>
+          <tr><td><code>avg_body_range_5</code></td><td>Mean body_to_range over last 5 bars.</td></tr>
+          <tr><td><code>avg_lower_wick_5</code></td><td>Mean lower_wick_ratio over last 5 bars.</td></tr>
+          <tr><td><code>lower_wick_x_rv_spike</code></td><td>lower_wick_ratio × rv_spike. Bullish rejection during vol spike = reversal setup.</td></tr>
+          <tr><td><code>rsi_14</code></td><td>Standard 14-period RSI: 100 − 100/(1 + RS). &lt;30 = oversold, &gt;70 = overbought.</td></tr>
+          <tr><td><code>stoch_k_14</code></td><td>(close − 14-bar low) / (14-bar high − 14-bar low) × 100. &lt;20 = oversold.</td></tr>
+          <tr><td><code>bb_pct_b</code></td><td>(close − lower_band) / (upper − lower). Bollinger %b. 0 = at lower band, 1 = at upper.</td></tr>
+          <tr><td><code>bb_bandwidth</code></td><td>(upper − lower) / mid. Bollinger bandwidth. Low = squeeze, high = expansion.</td></tr>
+          <tr><td><code>bb_kc_squeeze</code></td><td>1 if Bollinger Bands are inside Keltner Channels (BB upper &lt; KC upper AND BB lower &gt; KC lower). Squeeze signal.</td></tr>
+          <tr><td><code>macd_hist</code></td><td>EMA(12) − EMA(26) minus 9-period signal line. Positive = bullish momentum.</td></tr>
+          <tr><td><code>trend_slope_{w}</code> (w=20,60)</td><td>OLS slope of log(price) over w bars. Positive = uptrend.</td></tr>
+          <tr><td><code>trend_curvature_{w}</code> (w=20,60)</td><td>2nd-order coefficient of polynomial fit to log(price). Positive = accelerating up.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- E: VIX -->
+  <section>
+    <h3 style="color:#58a6ff;">E — VIX Intraday + Cross-Signal (SPX-VIX)</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>vix_intraday</code></td><td>Latest 1-min VIX close (or fallback to previous day's VIX close).</td></tr>
+          <tr><td><code>vix_z_60d</code></td><td>(vix_now − mean(vix_prior_60d)) / std(vix_prior_60d). Z-score against 60-day baseline.</td></tr>
+          <tr><td><code>vix_chg_5m</code></td><td>VIX change over last 5 bars. Positive = fear rising.</td></tr>
+          <tr><td><code>vix_chg_30m</code></td><td>VIX change over last 30 bars.</td></tr>
+          <tr><td><code>vix_accel</code></td><td>2nd derivative: (vix[−1] − vix[−2]) − (vix[−2] − vix[−3]). &gt;0 = accelerating vol.</td></tr>
+          <tr><td><code>spx_vix_beta</code></td><td>vix_chg_5m / |spx_chg_5m| (when |spx_chg| &gt; 0.5, else 0). Leverage effect proxy.</td></tr>
+          <tr><td><code>vix_chg_x_fall_norm</code></td><td>vix_chg_30m × fall_normalized. Rising vol during fall = increased reversal risk.</td></tr>
+          <tr><td><code>vix_1d_chg</code></td><td>Day-over-day VIX change.</td></tr>
+          <tr><td><code>vix_5d_chg</code></td><td>5-day VIX momentum.</td></tr>
+          <tr><td><code>vix_vs_20d</code></td><td>VIX vs 20-day mean. Regime shift indicator.</td></tr>
+          <tr><td><code>vix_trend_up</code></td><td>Binary: 1 if vix_5d_chg &gt; 0 (rising), else 0.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- F: Market Structure -->
+  <section>
+    <h3 style="color:#58a6ff;">F — Market Structure Anchors (VWAP, Gap, Key Levels)</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>vwap_dev</code></td><td>(price − session_VWAP) / session_VWAP. Positive = above VWAP.</td></tr>
+          <tr><td><code>dist_to_prev_close</code></td><td>(price − prev_close) / prev_close. Distance ratio from previous close.</td></tr>
+          <tr><td><code>dist_to_open</code></td><td>(price − day_open) / day_open. Intraday drift from open.</td></tr>
+          <tr><td><code>dist_to_day_high</code></td><td>(day_high − price) / price. Distance from session high. 0 = at high.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- G: Opening Range + Gap -->
+  <section>
+    <h3 style="color:#58a6ff;">G — Opening Range + Gap Features</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>gap_pts</code></td><td>day_open − prev_close. Raw gap in SPX points.</td></tr>
+          <tr><td><code>gap_pct</code></td><td>gap_pts / prev_close × 100. Gap as percent.</td></tr>
+          <tr><td><code>gap_dir</code></td><td>Encoded: +1 if gap &gt; 0.5 pts, −1 if &lt; −0.5, else 0.</td></tr>
+          <tr><td><code>open5_range</code></td><td>max(high[0:5]) − min(low[0:5]). First 5-bar volatility.</td></tr>
+          <tr><td><code>open5_dir</code></td><td>1 if close[5] &gt; open[0] (bullish open), else 0.</td></tr>
+          <tr><td><code>fall_speed</code></td><td>fall_pts / (bars_elapsed − 5). Downside velocity.</td></tr>
+          <tr><td><code>pct_day_at_low</code></td><td>bars_elapsed / 390. How late in day the low occurred (0–1).</td></tr>
+          <tr><td><code>gap_dir_x_fall</code></td><td>gap_dir × fall_normalized. Gap bias combined with move magnitude.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- H: Options-Derived -->
+  <section>
+    <h3 style="color:#58a6ff;">H — Options-Derived (Straddle Price + Implied-Realized Spread)</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>straddle_price</code></td><td>ATM call + ATM put mid-price at open (from VIX1D straddle data), or SPX × VIX / (100 × √252) as fallback. 1σ expected move in points.</td></tr>
+          <tr><td><code>vix1d</code></td><td>(straddle / SPX_open) × √252 × 100. Market-implied 1-day volatility on VIX scale (0–100).</td></tr>
+          <tr><td><code>fall_vs_straddle</code></td><td>fall_pts / straddle_price. How many straddles did the fall cover.</td></tr>
+          <tr><td><code>intraday_vrp</code></td><td>(VIX1D/100)² − (rv_20 × 252 × 390). Implied variance minus realized variance (annualized). Positive = short premium profitable.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- I: Squeeze / Options from Reversals -->
+  <section>
+    <h3 style="color:#58a6ff;">I — Squeeze / Options Features (from Reversal Analysis)</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>squeeze_encoded</code></td><td>Categorical: none=0, mild=1, moderate=2, strong=3. Based on ATM call body compression.</td></tr>
+          <tr><td><code>squeeze_duration</code></td><td>Consecutive bars with non-increasing rolling max of ATM call body sizes (20-bar lookback).</td></tr>
+          <tr><td><code>expansion_body</code></td><td>|close − open| of first bar after swing low. Large expansion = breakout from squeeze.</td></tr>
+          <tr><td><code>squeeze_min_body</code></td><td>Minimum candle body during squeeze period (floor 0.5). Baseline for expansion ratio.</td></tr>
+          <tr><td><code>expansion_ratio</code></td><td>expansion_body / squeeze_min_body. &gt;2 = moderate expansion, &gt;3 = strong.</td></tr>
+          <tr><td><code>fall_pts</code></td><td>swing_high − swing_low. Raw downside magnitude in SPX points.</td></tr>
+          <tr><td><code>fall_normalized</code></td><td>fall_pts / vix_prev. Fall scaled by volatility regime.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- J: Time-of-Day -->
+  <section>
+    <h3 style="color:#58a6ff;">J — Time-of-Day Encoding</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>minute_of_low</code></td><td>hour × 60 + minute. Range: 570 (9:30) to 960 (16:00).</td></tr>
+          <tr><td><code>time_sin</code> / <code>time_cos</code></td><td>sin / cos of 2π × (minute − 570) / 390. Periodic time encoding.</td></tr>
+          <tr><td><code>is_morning</code></td><td>1 if hour &lt; 11 ET.</td></tr>
+          <tr><td><code>is_afternoon</code></td><td>1 if hour ≥ 13 ET.</td></tr>
+          <tr><td><code>is_open30</code></td><td>1 if within first 30 minutes of session (9:30–10:00).</td></tr>
+          <tr><td><code>is_close30</code></td><td>1 if within last 30 minutes (15:30–16:00).</td></tr>
+          <tr><td><code>dow_encoded</code></td><td>Mon=0, Tue=1, Wed=2, Thu=3, Fri=4.</td></tr>
+          <tr><td><code>is_monday</code> / <code>is_tuesday</code> / <code>is_friday</code></td><td>Binary day-of-week indicators.</td></tr>
+          <tr><td><code>hour_of_low</code></td><td>Hour component of time_of_low (9–16 ET).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- K: Interaction Terms -->
+  <section>
+    <h3 style="color:#58a6ff;">K — Interaction Terms</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Feature</th><th>Computation</th></tr></thead>
+        <tbody>
+          <tr><td><code>stretch_x_squeeze</code></td><td>stretch_20 × squeeze_encoded. Overextension in compressed vol.</td></tr>
+          <tr><td><code>rv_spike_x_vol_imb</code></td><td>rv_spike × signed_vol_imb_10. Vol spike + directional imbalance.</td></tr>
+          <tr><td><code>vix_chg_x_fall_norm</code></td><td>vix_chg_30m × fall_normalized. Vol rise during down move.</td></tr>
+          <tr><td><code>gap_dir_x_fall</code></td><td>gap_dir × fall_normalized. Gap bias amplifies fall magnitude.</td></tr>
+          <tr><td><code>autocorr_x_stretch</code></td><td>autocorr_20 × stretch_20. Mean reversion + overextension.</td></tr>
+          <tr><td><code>lower_wick_x_rv_spike</code></td><td>lower_wick_ratio × rv_spike. Bullish rejection + vol spike.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Patches Analysis Metrics -->
+  <section>
+    <h3 style="color:#f0883e;">Patches Analysis — Key Metrics</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Metric</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Expected Move (1σ)</strong></td><td>When VIX1D available: straddle_price (ATM call + put mid at open). Fallback: SPX_open × VIX / 100 / √252.</td></tr>
+          <tr><td><strong>Patch Boxes (0.8σ / 1.0σ)</strong></td><td>Min/max of open ± σ during first 5 RTH bars (9:31–9:35). Creates upper/lower bands.</td></tr>
+          <tr><td><strong>VW Buy/Sell EM</strong></td><td>Volume-weighted average of open ± σ during bullish/bearish bars. Skew-adjusted anchors.</td></tr>
+          <tr><td><strong>PDC EM</strong></td><td>Previous day close ± 1σ expected move. Yesterday's expected range projected forward.</td></tr>
+          <tr><td><strong>Breach (1σ / 0.8σ)</strong></td><td>Whether price reached the full or inner expected move band during the day.</td></tr>
+          <tr><td><strong>Close Zone</strong></td><td>Where price closed: above_1sig, in_1sig_up_box, gap_upper, in_08sig_up_box, inside, in_08sig_dn_box, gap_lower, in_1sig_dn_box, below_1sig.</td></tr>
+          <tr><td><strong>Gap Zone</strong></td><td>Gap classification: gap_up_beyond_em, gap_up_within_em, flat, gap_dn_within_em, gap_dn_beyond_em.</td></tr>
+          <tr><td><strong>EM Source</strong></td><td>STR = straddle-derived (VIX1D), VIX = fallback VIX/√252 approximation.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Reversal Analysis Metrics -->
+  <section>
+    <h3 style="color:#f0883e;">Reversal Analysis — Key Metrics</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Metric</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Swing High / Swing Low</strong></td><td>Highest and lowest points within 30-min rolling window. Defines the fall event.</td></tr>
+          <tr><td><strong>Fall Points</strong></td><td>swing_high − swing_low. Raw downside magnitude.</td></tr>
+          <tr><td><strong>Fall Category</strong></td><td>small (30–50 pts), medium (50–80 pts), large (80+ pts).</td></tr>
+          <tr><td><strong>Reversal Points</strong></td><td>Max high within 60 bars after swing low minus swing low. Recovery magnitude.</td></tr>
+          <tr><td><strong>Reversal Category</strong></td><td>weak (0–20 pts), medium (20–50 pts), strong (50+ pts).</td></tr>
+          <tr><td><strong>Squeeze Strength</strong></td><td>ATM call body compression: none, mild (≥3 bars), moderate (≥5 bars + 2× expansion), strong (≥8 bars + 3× expansion).</td></tr>
+          <tr><td><strong>Squeeze Duration</strong></td><td>Consecutive bars with non-increasing rolling max of call body sizes (20-bar lookback).</td></tr>
+          <tr><td><strong>Expansion Ratio</strong></td><td>expansion_body / squeeze_min_body. Breakout strength after compression.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- VIX1D Computation -->
+  <section>
+    <h3 style="color:#f0883e;">VIX1D Computation</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Metric</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Straddle Price</strong></td><td>ATM 0DTE call mid + put mid, averaged over first 5 RTH bars (9:31–9:35). Smooths opening noise.</td></tr>
+          <tr><td><strong>VIX1D</strong></td><td>(straddle / SPX_open) × √252 × 100. Annualized 1-day implied volatility on VIX scale.</td></tr>
+          <tr><td><strong>EM (1σ)</strong></td><td>Raw straddle price ≈ 0.798 × σ × SPX. Direct expected move in points.</td></tr>
+          <tr><td><strong>ATM Strike</strong></td><td>SPX price rounded to nearest 25 pts. Used for 0DTE option ticker construction.</td></tr>
+          <tr><td><strong>Ticker Format</strong></td><td>O:SPXW{YYMMDD}{C|P}{strike×1000:08d} — e.g. O:SPXW260406C05875000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Model Evaluation Metrics -->
+  <section>
+    <h3 style="color:#f0883e;">Model Evaluation Metrics</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Metric</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Precision</strong></td><td>TP / (TP + FP). "If we predict reversal, does it actually reverse?" Primary optimization metric.</td></tr>
+          <tr><td><strong>Recall</strong></td><td>TP / (TP + FN). "Of all true reversals, how many did we catch?" Constrained ≥ 20%.</td></tr>
+          <tr><td><strong>F1 Score</strong></td><td>2 × (precision × recall) / (precision + recall). Harmonic mean balance metric.</td></tr>
+          <tr><td><strong>Accuracy</strong></td><td>(TP + TN) / N. Overall correctness (less useful with imbalanced classes).</td></tr>
+          <tr><td><strong>Brier Score</strong></td><td>Mean squared error of predicted probabilities vs binary outcome. Lower = better calibrated.</td></tr>
+          <tr><td><strong>Base Rate</strong></td><td>Σ(y) / N. Prior probability of positive class (significant reversal).</td></tr>
+          <tr><td><strong>Optimal Threshold</strong></td><td>Probability cutoff tuned to maximize precision @ recall ≥ 20%. Typically 0.60–0.75.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Model Differences -->
+  <section>
+    <h3 style="color:#f0883e;">Model Differences</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Aspect</th><th>Model 1 (Base)</th><th>Model 2 (Enhanced)</th><th>Model 3 (Holdout)</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Ensemble</strong></td><td>RF + GBM + XGB + LGBM → LogReg meta</td><td>Same 4 base learners + Platt calibration</td><td>RF + LGBM only (faster)</td></tr>
+          <tr><td><strong>Labels</strong></td><td>Binary: reversal_pts ≥ 20</td><td>Triple-barrier: PT/SL at k×σ, VB=60 bars</td><td>Same as Model 2</td></tr>
+          <tr><td><strong>CV</strong></td><td>Purged expanding-window (5 folds, embargo=2)</td><td>Same + time-of-day normalization</td><td>80/20 temporal holdout (no CV on test)</td></tr>
+          <tr><td><strong>Scaling</strong></td><td>StandardScaler</td><td>Robust rank scaling (percentile)</td><td>Same as Model 2</td></tr>
+          <tr><td><strong>Feature Selection</strong></td><td>All features</td><td>All features + roll_spread + vix_regime</td><td>Drop |corr| &gt; 0.85, keep top 30</td></tr>
+          <tr><td><strong>Calibration</strong></td><td>Raw meta probabilities</td><td>Platt calibration (LogReg on OOF probs)</td><td>Same as Model 2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Constants -->
+  <section>
+    <h3 style="color:#f0883e;">Key Constants &amp; Thresholds</h3>
+    <div class="tbl-wrap">
+      <table style="font-size:0.76rem;">
+        <thead><tr><th>Constant</th><th>Value</th><th>Context</th></tr></thead>
+        <tbody>
+          <tr><td>Trading Hours</td><td>09:30–16:00 ET</td><td>Regular trading hours (RTH)</td></tr>
+          <tr><td>Lookback (patches)</td><td>5 mins</td><td>9:31–9:35 ET for patch box construction</td></tr>
+          <tr><td>Reversal Window</td><td>30 mins</td><td>Rolling window for swing detection</td></tr>
+          <tr><td>Recovery Lookback</td><td>60 bars</td><td>Forward window to measure reversal size</td></tr>
+          <tr><td>Squeeze Lookback</td><td>20 bars</td><td>ATM call body compression analysis</td></tr>
+          <tr><td>√252</td><td>15.87</td><td>Daily-to-annual volatility scaling</td></tr>
+          <tr><td>√(2/π)</td><td>0.798</td><td>Bipower variance constant</td></tr>
+          <tr><td>Triple-Barrier k</td><td>1.5</td><td>Volatility multiplier for PT/SL levels</td></tr>
+          <tr><td>Correlation Threshold</td><td>0.85</td><td>Model 3 feature pruning cutoff</td></tr>
+          <tr><td>Strike Rounding</td><td>25 pts</td><td>ATM 0DTE option strike rounding</td></tr>
+          <tr><td>Min Fall (triple-barrier)</td><td>30 pts</td><td>Minimum fall to qualify for labeling</td></tr>
+        </tbody>
       </table>
     </div>
   </section>
