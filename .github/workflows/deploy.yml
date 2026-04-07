@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "0 22 * * 1-5"   # weekdays at 10 PM UTC (after US market close)
+    - cron: "0 22 * * 5"     # Fridays at 10 PM UTC (weekly, after US market close)
   workflow_dispatch:
 
 permissions:
@@ -45,9 +45,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/
-          key: market-data-v1-${{ steps.month.outputs.val }}
+          key: market-data-v2-${{ steps.month.outputs.val }}
           restore-keys: |
-            market-data-v1-
+            market-data-v2-
 
       - name: Set end_date to today in config.toml
         run: |

@@ -587,8 +587,12 @@ async function loadTab2(price, opts) {
   const lastClose  = parseFloat(price[price.length-1].close);
   const pctMove    = ((lastClose-firstClose)/firstClose*100).toFixed(2);
   const dir        = pctMove >= 0 ? 'up' : 'down';
-  const highs      = price.map(r => parseFloat(r.high)).filter(v => !isNaN(v));
-  const lows       = price.map(r => parseFloat(r.low)).filter(v => !isNaN(v));
+  let periodHigh = -Infinity, periodLow = Infinity;
+  for (const r of price) {
+    const h = parseFloat(r.high), l = parseFloat(r.low);
+    if (!isNaN(h) && h > periodHigh) periodHigh = h;
+    if (!isNaN(l) && l < periodLow)  periodLow  = l;
+  }
   const ivs        = opts.map(r => parseFloat(r.implied_volatility)).filter(v => !isNaN(v));
   const avgIV      = ivs.length ? (ivs.reduce((a,b)=>a+b,0)/ivs.length*100).toFixed(1) : '—';
   const totalOI    = opts.reduce((s,r) => s+(parseInt(r.open_interest)||0), 0);
@@ -608,8 +612,8 @@ async function loadTab2(price, opts) {
 
   document.getElementById('summary-cards').innerHTML = [
     { label:'SPX Last Close',  value: lastClose.toFixed(2), sub:`${pctMove>=0?'+':''}${pctMove}% vs period open`, cls: dir },
-    { label:'Period High',     value: Math.max(...highs).toFixed(2), sub:`Intraday 1-min · ${csvRange}`, cls:'up' },
-    { label:'Period Low',      value: Math.min(...lows).toFixed(2),  sub:'Intraday 1-min', cls:'down' },
+    { label:'Period High',     value: periodHigh.toFixed(2), sub:`Intraday 1-min · ${csvRange}`, cls:'up' },
+    { label:'Period Low',      value: periodLow.toFixed(2),  sub:'Intraday 1-min', cls:'down' },
     { label:'1-Min Bars',      value: price.length.toLocaleString(), sub:`${tradingDays} trading days` },
     { label:'Avg Implied Vol', value: `${avgIV}%`, sub:`${opts.length} contracts` },
     { label:'Total Open Int.', value: fmtI(totalOI), sub:`${calls} calls / ${puts} puts` },
