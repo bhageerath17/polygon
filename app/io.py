@@ -16,7 +16,13 @@ def append_csv(new_df: pd.DataFrame, path: Path) -> pd.DataFrame:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.stat().st_size > 0:
-        existing = pd.read_csv(path, index_col=0, parse_dates=True)
+        existing = pd.read_csv(path, index_col=0)
+        # Coerce the CSV's string index to match new_df's dtype (handles
+        # timezone-aware datetimes with mixed UTC offsets like EST/EDT).
+        if hasattr(new_df.index, 'tz') and new_df.index.tz is not None:
+            existing.index = pd.to_datetime(existing.index, utc=True).tz_convert(new_df.index.tz)
+        elif pd.api.types.is_datetime64_any_dtype(new_df.index):
+            existing.index = pd.to_datetime(existing.index)
         merged = pd.concat([existing, new_df])
         merged = merged[~merged.index.duplicated(keep="last")]
         merged.sort_index(inplace=True)
