@@ -12,3 +12,6 @@ dashboard/*.json
 *.csv
 *.json
 pine.txt
+scripts/live_signal.py
+scripts/backtest_signals.py
+data/signal_backtest.html

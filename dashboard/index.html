@@ -109,7 +109,7 @@
       This dashboard analyses the <b>SPX 0DTE Expected Move (EM)</b> — the daily price range the
       options market implies for the S&amp;P 500 index on a given day, derived from the
       <b>VIX (CBOE Volatility Index)</b>. Data is sourced from <b>Polygon.io</b> and covers
-      <b>3 months of 1-minute SPX bars</b> (Jan–Apr 2026) plus <b>VIX daily closes</b>.
+      <b id="data-coverage-text">3+ years of 1-minute SPX bars</b> plus <b>VIX daily closes</b>.
     </p>
 
     <div class="pill-row" id="overview-pills"></div>
@@ -182,7 +182,7 @@
 
     <hr class="divider" />
 
-    <h2>Key Findings  <span style="font-size:0.8rem;color:#8b949e;font-weight:400">(Jan–Apr 2026, 63 trading days)</span></h2>
+    <h2>Key Findings  <span id="key-findings-sub" style="font-size:0.8rem;color:#8b949e;font-weight:400"></span></h2>
     <div id="insight-boxes"></div>
 
   </div>
@@ -536,10 +536,20 @@ const GAP_ZONE_LABELS = {
 /* ── TAB 1 — OVERVIEW ─────────────────────────── */
 function buildOverview(s) {
   // Pills
+  // Update dynamic text blocks
+  const dateRange = s.date_range || '';
+  const [drStart, drEnd] = dateRange.split(' to ').map(d => d.trim());
+  const fmtDR = d => { try { return new Date(d).toLocaleDateString('en-US',{month:'short',year:'numeric'}); } catch(e) { return d; } };
+  const rangeLabel = drStart && drEnd ? `${fmtDR(drStart)} – ${fmtDR(drEnd)}` : dateRange;
+  const kfSub = document.getElementById('key-findings-sub');
+  if (kfSub) kfSub.textContent = `(${rangeLabel}, ${s.trading_days} trading days)`;
+  const covEl = document.getElementById('data-coverage-text');
+  if (covEl) covEl.textContent = `${s.trading_days} trading days of 1-minute SPX bars (${rangeLabel})`;
+
   document.getElementById('overview-pills').innerHTML = [
     { text: `${s.trading_days} Trading Days`,           cls: 'blue'  },
-    { text: `Jan–Apr 2026`,                             cls: 'blue'  },
-    { text: `${s.trading_days * 390 | 0}+ 1-Min Bars`, cls: 'green' },
+    { text: rangeLabel,                                 cls: 'blue'  },
+    { text: `${(s.trading_days * 390)|0}+ 1-Min Bars`, cls: 'green' },
     { text: `VIX Range ${s.vix_stats.min}–${s.vix_stats.max}`, cls: 'amber' },
     { text: `${s['any_breach_1sig_%']}% Breach Rate`,  cls: 'red'   },
   ].map(p => `<span class="pill ${p.cls}">${p.text}</span>`).join('');
@@ -584,12 +594,23 @@ async function loadTab2(price, opts) {
   const totalOI    = opts.reduce((s,r) => s+(parseInt(r.open_interest)||0), 0);
   const calls      = opts.filter(r => r.contract_type==='call').length;
   const puts       = opts.filter(r => r.contract_type==='put').length;
+  // Derive date range from the price data itself
+  const firstDt = price[0].datetime || price[0][Object.keys(price[0])[0]] || '';
+  const lastDt  = price[price.length-1].datetime || price[price.length-1][Object.keys(price[price.length-1])[0]] || '';
+  const fmtDate = s => { try { return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); } catch(e) { return s.slice(0,10); } };
+  const csvRange = firstDt && lastDt ? `${fmtDate(firstDt)} – ${fmtDate(lastDt)}` : '';
+
+  // Unique trading days
+  const tradingDays = new Set(price.map(r => {
+    const d = r.datetime || r[Object.keys(r)[0]] || '';
+    return d.slice(0, 10);
+  })).size;
 
   document.getElementById('summary-cards').innerHTML = [
     { label:'SPX Last Close',  value: lastClose.toFixed(2), sub:`${pctMove>=0?'+':''}${pctMove}% vs period open`, cls: dir },
-    { label:'Period High',     value: Math.max(...highs).toFixed(2), sub:'Intraday 1-min', cls:'up' },
+    { label:'Period High',     value: Math.max(...highs).toFixed(2), sub:`Intraday 1-min · ${csvRange}`, cls:'up' },
     { label:'Period Low',      value: Math.min(...lows).toFixed(2),  sub:'Intraday 1-min', cls:'down' },
-    { label:'1-Min Bars',      value: price.length.toLocaleString(), sub:'Jan–Apr 2026' },
+    { label:'1-Min Bars',      value: price.length.toLocaleString(), sub:`${tradingDays} trading days` },
     { label:'Avg Implied Vol', value: `${avgIV}%`, sub:`${opts.length} contracts` },
     { label:'Total Open Int.', value: fmtI(totalOI), sub:`${calls} calls / ${puts} puts` },
   ].map(c => `<div class="card"><div class="label">${c.label}</div>

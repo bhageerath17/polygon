@@ -16,7 +16,7 @@ def append_csv(new_df: pd.DataFrame, path: Path) -> pd.DataFrame:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.stat().st_size > 0:
-        existing = pd.read_csv(path, index_col=0)
+        existing = pd.read_csv(path, index_col=0, parse_dates=True)
         merged = pd.concat([existing, new_df])
         merged = merged[~merged.index.duplicated(keep="last")]
         merged.sort_index(inplace=True)
