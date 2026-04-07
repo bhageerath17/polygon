@@ -42,17 +42,30 @@ REVERSAL_BINS = [
 
 # ── Ticker builder ────────────────────────────────────────────────────────────
 
-def build_0dte_call_ticker(spx_price: float, trade_date: date, strike_rounding: int = 25) -> str:
-    """Build a Polygon 0DTE ATM call ticker for SPX.
+def build_0dte_ticker(
+    spx_price: float,
+    trade_date: date,
+    contract_type: str = "C",
+    strike_rounding: int = 25,
+) -> str:
+    """Build a Polygon 0DTE ATM option ticker for SPX.
 
-    Format: O:SPX{YYMMDD}C{strike*1000:08d}
-    e.g. SPX at 5875 on 2026-01-02 → O:SPX260102C05875000
+    Args:
+        contract_type: "C" for call, "P" for put.
+
+    Format: O:SPXW{YYMMDD}{C|P}{strike*1000:08d}
+    e.g. SPX at 5875 on 2026-01-02 → O:SPXW260102C05875000
     """
     atm_strike = round(spx_price / strike_rounding) * strike_rounding
     date_str   = trade_date.strftime("%y%m%d")
     strike_int = int(atm_strike * 1000)
     # Polygon uses SPXW prefix for 0DTE weeklies (Mon/Wed/Fri/Tue/Thu)
-    return f"O:SPXW{date_str}C{strike_int:08d}"
+    return f"O:SPXW{date_str}{contract_type}{strike_int:08d}"
+
+
+def build_0dte_call_ticker(spx_price: float, trade_date: date, strike_rounding: int = 25) -> str:
+    """Build a Polygon 0DTE ATM call ticker for SPX (convenience wrapper)."""
+    return build_0dte_ticker(spx_price, trade_date, "C", strike_rounding)
 
 
 # ── Reversal event ─────────────────────────────────────────────────────────────

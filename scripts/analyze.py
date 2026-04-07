@@ -14,8 +14,17 @@ def main() -> None:
     vix = pd.read_csv(settings.vix_csv, index_col="date", parse_dates=True)
     vix.index = vix.index.date  # ensure date objects for lookup
 
+    # Load straddle-derived VIX1D if available
+    vix1d_df = None
+    if settings.vix1d_csv.exists():
+        print("Loading VIX1D (straddle-derived) data...")
+        vix1d_df = pd.read_csv(settings.vix1d_csv, index_col="date")
+        print(f"  VIX1D available for {vix1d_df['vix1d'].notna().sum()} days")
+    else:
+        print("  VIX1D not found — using VIX / √252 fallback")
+
     print(f"Running patches analysis (lookback={settings.lookback_mins} mins)...")
-    daily_df, summary = run_patches_analysis(spx, vix, settings.lookback_mins)
+    daily_df, summary = run_patches_analysis(spx, vix, settings.lookback_mins, vix1d_df=vix1d_df)
 
     # Save CSV
     save_csv(daily_df, settings.analysis_csv)

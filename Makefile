@@ -1,4 +1,4 @@
-.PHONY: setup fetch fetch-intraday analyze reversal model run serve clean
+.PHONY: setup fetch fetch-intraday fetch-vix1d analyze reversal model run serve clean
 
 setup:
 	uv sync --all-extras
@@ -9,6 +9,9 @@ fetch:
 
 fetch-intraday:
 	PYTHONPATH=. uv run python scripts/fetch_intraday.py
+
+fetch-vix1d:
+	PYTHONPATH=. uv run python scripts/fetch_vix1d.py
 
 analyze:
 	PYTHONPATH=. uv run python scripts/analyze.py

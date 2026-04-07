@@ -150,10 +150,15 @@ def build_feature_matrix(
     vix_daily: pd.DataFrame | None = None,
     spy_1min:  pd.DataFrame | None = None,
     vix_1min:  pd.DataFrame | None = None,
+    vix1d_df:  pd.DataFrame | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """
     For each event build a feature vector at T = time_of_low.
     Returns (X, y, feature_names).
+
+    Args:
+        vix1d_df: Optional DataFrame indexed by date str with 'straddle_price',
+                  'vix1d', 'em_1d' columns from straddle-derived VIX1D.
     """
     spx = _prep_1min(spx_1min)
     spy = _prep_1min(spy_1min) if (spy_1min is not None and not spy_1min.empty) else None
@@ -172,7 +177,7 @@ def build_feature_matrix(
     for ev in events:
         row = _compute_event_features(
             ev, spx_daily, spy_daily, vix_daily_1min,
-            vix_daily, tod_baseline,
+            vix_daily, tod_baseline, vix1d_df,
         )
         rows.append(row)
 
@@ -197,6 +202,7 @@ def _compute_event_features(
     vix_daily_1min: dict,
     vix_daily:  pd.DataFrame | None,
     tod_baseline: dict,
+    vix1d_df: pd.DataFrame | None = None,
 ) -> dict:
     date_str = str(ev.get("date", ""))
     time_str = str(ev.get("time_of_low", "12:00:00"))[:5]   # "HH:MM"
@@ -473,14 +479,31 @@ def _compute_event_features(
     f["fall_speed"]      = float(ev.get("fall_pts", 0)) / bars_elapsed
     f["pct_day_at_low"]  = len(spx_at_T) / (6.5 * 60)
 
-    # ── H. Straddle proxy + implied-realized spread ───────────────────────────
+    # ── H. Straddle price + implied-realized spread ────────────────────────────
     spx_price   = last_price
     vix_level   = f["vix_intraday"]
-    daily_sigma = spx_price * vix_level / (100 * sqrt(252))   # 1σ daily move
-    f["straddle_proxy"]      = daily_sigma
+
+    # Use actual straddle from VIX1D when available, else VIX proxy
+    straddle_from_vix1d = None
+    vix1d_level = None
+    if vix1d_df is not None and date_str in vix1d_df.index:
+        row_v = vix1d_df.loc[date_str]
+        if pd.notna(row_v.get("straddle_price")):
+            straddle_from_vix1d = float(row_v["straddle_price"])
+        if pd.notna(row_v.get("vix1d")):
+            vix1d_level = float(row_v["vix1d"])
+
+    if straddle_from_vix1d is not None:
+        daily_sigma = straddle_from_vix1d
+    else:
+        daily_sigma = spx_price * vix_level / (100 * sqrt(252))
+
+    f["straddle_price"]      = daily_sigma
+    f["vix1d"]               = vix1d_level if vix1d_level else vix_level
     f["fall_vs_straddle"]    = float(ev.get("fall_pts", 0)) / max(daily_sigma, 0.1)
     # Intraday VRP: annualised IV^2 - annualised RV_{20}
-    iv2 = (vix_level / 100) ** 2
+    iv_ann = (vix1d_level / 100) if vix1d_level else (vix_level / 100)
+    iv2 = iv_ann ** 2
     rv20_ann = f["rv_20"] * 252 * 390   # scale 1-min RV to annual
     f["intraday_vrp"] = iv2 - rv20_ann
 

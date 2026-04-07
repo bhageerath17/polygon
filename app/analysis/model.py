@@ -248,6 +248,7 @@ def run_model(
     spx_1min:  pd.DataFrame | None = None,
     spy_1min:  pd.DataFrame | None = None,
     vix_1min:  pd.DataFrame | None = None,
+    vix1d_df:  pd.DataFrame | None = None,
 ) -> dict:
     from app.analysis.features import build_feature_matrix
 
@@ -261,6 +262,7 @@ def run_model(
         vix_daily = vix_daily,
         spy_1min  = spy_1min,
         vix_1min  = vix_1min,
+        vix1d_df  = vix1d_df,
     )
     print(f"  Features: {len(feature_names)}  |  Pos: {y.sum()}/{len(y)}")
 

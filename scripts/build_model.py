@@ -53,6 +53,12 @@ def main():
     vix_daily = _load_csv(settings.vix_csv,      index_col="date")
     spy_1min  = _load_csv(settings.spy_1min_csv, index_col="datetime")
     vix_1min  = _load_csv(settings.vix_1min_csv, index_col="datetime")
+
+    vix1d_df = None
+    if settings.vix1d_csv.exists():
+        vix1d_df = _load_csv(settings.vix1d_csv, index_col="date", parse_dates=False)
+        if vix1d_df.empty:
+            vix1d_df = None
     print()
 
     results = run_model(
@@ -61,6 +67,7 @@ def main():
         spx_1min  = spx_1min   if not spx_1min.empty   else None,
         spy_1min  = spy_1min   if not spy_1min.empty   else None,
         vix_1min  = vix_1min   if not vix_1min.empty   else None,
+        vix1d_df  = vix1d_df,
     )
 
     if "error" in results:

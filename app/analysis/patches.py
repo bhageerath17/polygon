@@ -28,7 +28,14 @@ SQRT252 = sqrt(252)
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def _sig(open_price: float, vix: float) -> float:
+def _sig(open_price: float, vix: float, em_1d: float | None = None) -> float:
+    """1σ daily expected move in SPX points.
+
+    If em_1d (straddle-derived 1-day EM) is available, use it directly.
+    Otherwise fall back to VIX / √252 approximation.
+    """
+    if em_1d is not None and em_1d > 0:
+        return em_1d
     return open_price * (vix / 100.0) / SQRT252
 
 
@@ -70,6 +77,7 @@ def _analyse_day(
     prev_close: float | None,
     prev_vix: float | None,
     lookback_mins: int,
+    em_1d: float | None = None,
 ) -> dict | None:
     if prev_vix is None or len(day_bars) < lookback_mins + 1:
         return None
@@ -81,7 +89,7 @@ def _analyse_day(
     rest     = day_bars.iloc[lookback_mins + 1:]
 
     # ── Patch boxes
-    sigs      = lookback["open"].apply(lambda o: _sig(o, prev_vix))
+    sigs      = lookback["open"].apply(lambda o: _sig(o, prev_vix, em_1d))
     up10      = lookback["open"] + sigs
     up08      = lookback["open"] + sigs * 0.8
     dn08      = lookback["open"] - sigs * 0.8
@@ -96,7 +104,7 @@ def _analyse_day(
     buy_vol = sell_vol = 0.0
     sum_vw_buy_up = sum_vw_sell_dn = 0.0
     for _, row in lookback.iterrows():
-        s   = _sig(row["open"], prev_vix)
+        s   = _sig(row["open"], prev_vix, em_1d)
         bv  = row["close"] > row["open"] and float(row.get("volume", 0) or 0)
         sv  = row["close"] < row["open"] and float(row.get("volume", 0) or 0)
         ev  = float(row.get("volume", 0) or 0) * 0.5 if row["close"] == row["open"] else 0
@@ -114,7 +122,7 @@ def _analyse_day(
     skew_mid   = (vw_buy_em + vw_sell_em) / 2 if vw_buy_em and vw_sell_em else None
 
     # ── PDC EM
-    pdc_em        = _sig(prev_close, prev_vix) if prev_close else None
+    pdc_em        = _sig(prev_close, prev_vix, em_1d) if prev_close else None
     pdc_em_upper  = prev_close + pdc_em        if pdc_em    else None
     pdc_em_lower  = prev_close - pdc_em        if pdc_em    else None
 
@@ -150,6 +158,8 @@ def _analyse_day(
 
     return {
         "vix_prev":          round(prev_vix, 2),
+        "vix1d":             round(em_1d / float(day_bars.iloc[0]["open"]) * SQRT252 * 100, 2) if em_1d else None,
+        "em_source":         "straddle" if em_1d else "vix",
         "sig":               round(float(sigs.mean()), 2),
         "open":              round(day_open, 2),
         "high":              round(day_high, 2),
@@ -187,8 +197,15 @@ def run_patches_analysis(
     spx_1min: pd.DataFrame,
     vix_daily: pd.DataFrame,
     lookback_mins: int = 5,
+    vix1d_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, dict]:
-    """Return (daily_df, summary_dict)."""
+    """Return (daily_df, summary_dict).
+
+    Args:
+        vix1d_df: Optional DataFrame indexed by date str with 'em_1d' column
+                  (straddle-derived 1-day expected move). When provided, uses
+                  actual market-implied EM instead of VIX / √252.
+    """
     spx_1min.index = pd.to_datetime(spx_1min.index, utc=True).tz_convert("America/New_York")
     trading_days = sorted(set(spx_1min.index.date))
     rows = []
@@ -206,7 +223,14 @@ def run_patches_analysis(
             prev_bars  = spx_1min[spx_1min.index.date == trading_days[i - 1]]
             prev_close = float(prev_bars.iloc[-1]["close"]) if len(prev_bars) else None
 
-        result = _analyse_day(day_bars, prev_close, prev_vix, lookback_mins)
+        # Straddle-derived 1-day EM (if available)
+        em_1d = None
+        if vix1d_df is not None and str(day) in vix1d_df.index:
+            val = vix1d_df.loc[str(day), "em_1d"]
+            if pd.notna(val):
+                em_1d = float(val)
+
+        result = _analyse_day(day_bars, prev_close, prev_vix, lookback_mins, em_1d)
         if result:
             rows.append({"date": str(day), **result})
 

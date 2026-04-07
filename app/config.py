@@ -48,6 +48,7 @@ class Settings:
     vix_csv: Path
     spy_1min_csv: Path
     vix_1min_csv: Path
+    vix1d_csv: Path
     analysis_csv: Path
     analysis_json: Path
     reversal_csv: Path
@@ -81,6 +82,7 @@ settings = Settings(
     vix_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["vix_csv"],
     spy_1min_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["spy_1min_csv"],
     vix_1min_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["vix_1min_csv"],
+    vix1d_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["vix1d_csv"],
     analysis_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_csv"],
     analysis_json=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["analysis_json"],
     reversal_csv=_ROOT / _cfg["paths"]["data_dir"] / _cfg["paths"]["reversal_csv"],
