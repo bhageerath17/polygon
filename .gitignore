@@ -15,3 +15,9 @@ pine.txt
 scripts/live_signal.py
 scripts/backtest_signals.py
 data/signal_backtest.html
+
+# Warlord analysis (local only)
+app/analysis/warlord.py
+scripts/build_warlord.py
+warlord_dashboard.html
+data/warlord_results.json
