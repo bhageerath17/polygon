@@ -56,52 +56,54 @@ jobs:
           sed -i "s/^end_date   =.*/end_date   = \"$TODAY\"/" config.toml
           grep end_date config.toml
 
-      # ── Fetch data (incremental on cache hit, full on cold start) ───────────
-      - name: Fetch SPX + VIX data
+      # ── Phase 1: Fetch data in parallel ────────────────────────────────────
+      # fetch.py and fetch_intraday.py have no shared inputs — run together.
+      - name: "Phase 1 · Fetch SPX/VIX + intraday data (parallel)"
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/fetch.py
+        run: |
+          PYTHONPATH=. uv run python scripts/fetch.py &
+          pid_fetch=$!
+          PYTHONPATH=. uv run python scripts/fetch_intraday.py &
+          pid_intra=$!
+          wait $pid_fetch  || exit 1
+          wait $pid_intra  || exit 1
 
-      - name: Fetch SPY + VIX 1-min intraday data
+      # ── Phase 2: VIX1D + analysis in parallel ──────────────────────────────
+      # All three read from fetch.py outputs (spx_1min.csv, vix_daily.csv).
+      # reversal_analysis.json is needed by the models in phase 3.
+      - name: "Phase 2 · VIX1D + analyze + reversal (parallel)"
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/fetch_intraday.py
+        run: |
+          PYTHONPATH=. uv run python scripts/fetch_vix1d.py &
+          pid_vix1d=$!
+          PYTHONPATH=. uv run python scripts/analyze.py &
+          pid_ana=$!
+          PYTHONPATH=. uv run python scripts/reversal_analysis.py &
+          pid_rev=$!
+          wait $pid_vix1d  || exit 1
+          wait $pid_ana    || exit 1
+          wait $pid_rev    || exit 1
 
-      - name: Compute VIX1D from ATM 0DTE straddles
+      # ── Phase 3: Build all models in parallel ──────────────────────────────
+      # All models read reversal_analysis.json + CSV data from phases 1-2.
+      - name: "Phase 3 · Build all models (parallel)"
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/fetch_vix1d.py
-
-      # ── Analysis + model training (always re-run on fresh data) ─────────────
-      - name: Run patches analysis
-        env:
-          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/analyze.py
-
-      - name: Run reversal analysis
-        env:
-          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/reversal_analysis.py
-
-      - name: Build prediction model (Model 1)
-        env:
-          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/build_model.py
-
-      - name: Build prediction model (Model 2 — triple-barrier + calibration)
-        env:
-          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/build_model2.py
-
-      - name: Build prediction model (Model 3 — holdout validation)
-        env:
-          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/build_model3.py
-
-      - name: Build Warlord analysis (EOD pin prediction)
-        env:
-          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-        run: PYTHONPATH=. uv run python scripts/build_warlord.py
+        run: |
+          PYTHONPATH=. uv run python scripts/build_model.py &
+          pid_m1=$!
+          PYTHONPATH=. uv run python scripts/build_model2.py &
+          pid_m2=$!
+          PYTHONPATH=. uv run python scripts/build_model3.py &
+          pid_m3=$!
+          PYTHONPATH=. uv run python scripts/build_warlord.py &
+          pid_w=$!
+          wait $pid_m1 || exit 1
+          wait $pid_m2 || exit 1
+          wait $pid_m3 || exit 1
+          wait $pid_w  || exit 1
 
       # ── Save updated data back to cache ─────────────────────────────────────
       # actions/cache saves automatically at job end when key matches or is new.

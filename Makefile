@@ -1,5 +1,7 @@
-.PHONY: setup fetch fetch-intraday fetch-vix1d analyze reversal model model3 warlord run serve clean
+.PHONY: setup fetch fetch-intraday fetch-vix1d analyze reversal model model2 model3 warlord \
+       fetch-all analyze-all models-all build-all run serve clean
 
+# ── Individual targets ────────────────────────────────────────────────────
 setup:
 	uv sync --all-extras
 	@echo "✓ Environment ready. Activate with: source .venv/bin/activate"
@@ -22,16 +24,33 @@ reversal:
 model:
 	PYTHONPATH=. uv run python scripts/build_model.py
 
+model2:
+	PYTHONPATH=. uv run python scripts/build_model2.py
+
 model3:
 	PYTHONPATH=. uv run python scripts/build_model3.py
 
 warlord:
 	PYTHONPATH=. uv run python scripts/build_warlord.py
 
+# ── Parallel phase targets (mirrors CI) ───────────────────────────────────
+fetch-all:                          ## Phase 1: fetch + fetch-intraday in parallel
+	$(MAKE) -j2 fetch fetch-intraday
+
+analyze-all: fetch-all              ## Phase 2: vix1d + analyze + reversal in parallel
+	$(MAKE) -j3 fetch-vix1d analyze reversal
+
+models-all: analyze-all             ## Phase 3: all 4 models in parallel
+	$(MAKE) -j4 model model2 model3 warlord
+
+build-all: models-all               ## Full pipeline: fetch → analyze → models (parallel within each phase)
+	@echo "✓ Full build complete"
+
+# ── Dev helpers ───────────────────────────────────────────────────────────
 run:
 	PYTHONPATH=. uv run python scripts/backtest.py
 
-serve:
+serve: build-all
 	cp data/spx_1min.csv data/spx_options_snapshot.csv data/patches_analysis.json data/reversal_analysis.json data/model_results.json dashboard/
 	-cp data/model2_results.json data/model3_results.json data/warlord_results.json dashboard/ 2>/dev/null
 	@echo "Open http://localhost:8000/dashboard/"
