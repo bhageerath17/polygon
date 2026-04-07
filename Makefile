@@ -1,4 +1,4 @@
-.PHONY: setup fetch fetch-intraday fetch-vix1d analyze reversal model model3 run serve clean
+.PHONY: setup fetch fetch-intraday fetch-vix1d analyze reversal model model3 warlord run serve clean
 
 setup:
 	uv sync --all-extras
@@ -25,12 +25,15 @@ model:
 model3:
 	PYTHONPATH=. uv run python scripts/build_model3.py
 
+warlord:
+	PYTHONPATH=. uv run python scripts/build_warlord.py
+
 run:
 	PYTHONPATH=. uv run python scripts/backtest.py
 
 serve:
 	cp data/spx_1min.csv data/spx_options_snapshot.csv data/patches_analysis.json data/reversal_analysis.json data/model_results.json dashboard/
-	-cp data/model2_results.json data/model3_results.json dashboard/ 2>/dev/null
+	-cp data/model2_results.json data/model3_results.json data/warlord_results.json dashboard/ 2>/dev/null
 	@echo "Open http://localhost:8000/dashboard/"
 	uv run python -m http.server 8000
 

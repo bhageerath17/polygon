@@ -104,6 +104,7 @@
   <button class="tab-btn"        onclick="switchTab('tab-analysis',  this)">Patches Analysis</button>
   <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
   <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
+  <button class="tab-btn"        onclick="switchTab('tab-warlord',   this)">Warlord</button>
   <button class="tab-btn"        onclick="switchTab('tab-glossary',  this)">Glossary</button>
 </nav>
 
@@ -866,6 +867,77 @@
 
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════
+     TAB 7 — WARLORD (EOD Pin Prediction)
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="tab-warlord" class="tab-panel">
+  <div class="grid" id="warlord-summary-cards"></div>
+
+  <!-- Multi-timepoint comparison -->
+  <section>
+    <h2>Multi-Timepoint Comparison</h2>
+    <div id="warlord-timepoint-chart" class="tv-chart" style="height:340px;"></div>
+  </section>
+
+  <!-- Cumulative P&L -->
+  <section>
+    <h2>Cumulative Warlord P&L (Holdout)</h2>
+    <div id="warlord-pnl-chart" class="tv-chart" style="height:340px;"></div>
+  </section>
+
+  <!-- 6-Dimension Segmentation (3x2 grid) -->
+  <section>
+    <h2>6-Dimension Segmentation Analysis</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div class="panel"><h3>VIX Regime</h3><div id="warlord-seg-vix" style="height:280px;"></div></div>
+      <div class="panel"><h3>Range Compression</h3><div id="warlord-seg-range" style="height:280px;"></div></div>
+      <div class="panel"><h3>Straddle Decay</h3><div id="warlord-seg-straddle" style="height:280px;"></div></div>
+      <div class="panel"><h3>Trend State</h3><div id="warlord-seg-trend" style="height:280px;"></div></div>
+      <div class="panel"><h3>Strike Proximity</h3><div id="warlord-seg-strike" style="height:280px;"></div></div>
+      <div class="panel"><h3>Day of Week</h3><div id="warlord-seg-dow" style="height:280px;"></div></div>
+    </div>
+  </section>
+
+  <!-- Heuristic Score Buckets -->
+  <section>
+    <h2>Heuristic Score Buckets</h2>
+    <div id="warlord-heuristic-chart" class="tv-chart" style="height:320px;"></div>
+  </section>
+
+  <!-- Feature Importance -->
+  <section>
+    <h2>Top Feature Importance</h2>
+    <div id="warlord-feature-chart" class="tv-chart" style="height:400px;"></div>
+  </section>
+
+  <!-- Execution Heuristics Table -->
+  <section>
+    <h2>Execution Heuristics</h2>
+    <div class="tbl-wrap">
+      <table id="warlord-heuristics-table">
+        <thead><tr><th>Rule</th><th>Mechanism</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Per-Day Prediction Table -->
+  <section>
+    <h2>Holdout Predictions (Per Day)</h2>
+    <div class="tbl-wrap" style="max-height:500px; overflow-y:auto;">
+      <table id="warlord-predictions-table">
+        <thead><tr>
+          <th>Date</th><th>DOW</th><th>Spot@T</th><th>EOD Close</th>
+          <th>Top-1 Zone</th><th>Top-2 Zone</th><th>Top-3 Zone</th>
+          <th>Actual Zone</th><th>Top-1 Hit</th><th>Top-3 Hit</th>
+          <th>Distance</th><th>P&L</th><th>Heuristic</th><th>VIX</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
 <script>
 let _spxPriceCache = null;
 let _modelCache    = null;
@@ -873,6 +945,8 @@ let _model2Cache   = null;
 let _model2Loaded  = false;
 let _model3Cache   = null;
 let _model3Loaded  = false;
+let _warlordCache  = null;
+let _warlordLoaded = false;
 
 function switchTab(id, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -907,6 +981,18 @@ function switchTab(id, btn) {
       ['spx-plotly-chart3','model3-vix-regime-chart'].forEach(eid => {
         const el3 = document.getElementById(eid);
         if (el3 && el3.data && el3.data.length) Plotly.Plots.resize(el3);
+      });
+    }
+  }
+  if (id === 'tab-warlord') {
+    if (!_warlordLoaded) {
+      loadWarlordData();
+    } else {
+      ['warlord-timepoint-chart','warlord-pnl-chart','warlord-seg-vix','warlord-seg-range',
+       'warlord-seg-straddle','warlord-seg-trend','warlord-seg-strike','warlord-seg-dow',
+       'warlord-heuristic-chart','warlord-feature-chart'].forEach(eid => {
+        const el = document.getElementById(eid);
+        if (el && el.data && el.data.length) Plotly.Plots.resize(el);
       });
     }
   }
@@ -2483,6 +2569,185 @@ async function init() {
     status.textContent = `Error: ${e.message} — run make fetch && make analyze first.`;
     console.error(e);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   WARLORD TAB — EOD Pin Prediction
+   ══════════════════════════════════════════════════════════════════════════ */
+const WL_DARK = { paper_bgcolor:'#0d1117', plot_bgcolor:'#0d1117',
+  font:{ color:'#e6edf3', size:11, family:'-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }};
+const WL_GRID = { showgrid:true, gridcolor:'#1e2530', zeroline:false };
+const WL_COLORS = ['#58a6ff','#3fb950','#f0883e','#f85149','#bc8cff','#e3b341','#79c0ff','#d2a8ff'];
+
+async function loadWarlordData() {
+  try {
+    const res = await fetch('warlord_results.json');
+    if (!res.ok) throw new Error('warlord_results.json not found — run make warlord');
+    const d = await res.json();
+    _warlordCache = d;
+    _warlordLoaded = true;
+    renderWarlordSummary(d);
+    renderWarlordTimepoint(d);
+    renderWarlordPnL(d);
+    renderWarlordSegmentation(d);
+    renderWarlordHeuristicBuckets(d);
+    renderWarlordFeatures(d);
+    renderWarlordHeuristicsTable(d);
+    renderWarlordPredictions(d);
+  } catch(e) { console.error('Warlord load error:', e); }
+}
+
+function renderWarlordSummary(d) {
+  const el = document.getElementById('warlord-summary-cards');
+  const pnlClass = d.warlord_total_pnl >= 0 ? 'up' : 'down';
+  el.innerHTML = `
+    <div class="card"><div class="label">Holdout Top-1 Accuracy</div>
+      <div class="value">${(d.holdout_top1_accuracy*100).toFixed(1)}%</div>
+      <div class="sub">Train: ${(d.train_top1_accuracy*100).toFixed(1)}%</div></div>
+    <div class="card"><div class="label">Top-3 Hit Rate</div>
+      <div class="value up">${(d.holdout_top3_accuracy*100).toFixed(1)}%</div>
+      <div class="sub">${d.n_holdout} holdout days</div></div>
+    <div class="card"><div class="label">Avg Distance to Actual</div>
+      <div class="value">${d.holdout_avg_distance.toFixed(1)} pts</div>
+      <div class="sub">Median: ${d.holdout_median_distance.toFixed(1)} pts</div></div>
+    <div class="card"><div class="label">Total P&L</div>
+      <div class="value ${pnlClass}">$${d.warlord_total_pnl.toLocaleString()}</div>
+      <div class="sub">Avg/day: $${d.warlord_avg_pnl.toFixed(1)} | Win: ${(d.warlord_win_rate*100).toFixed(1)}%</div></div>
+    <div class="card"><div class="label">Models</div>
+      <div class="value" style="font-size:1rem;">${d.models_used.join(', ')}</div>
+      <div class="sub">${d.n_features_selected}/${d.n_features_original} features</div></div>
+    <div class="card"><div class="label">Zone Config</div>
+      <div class="value" style="font-size:1rem;">${d.zone_width}pt zones</div>
+      <div class="sub">${d.n_candidate_zones} candidates | Wing: ${d.wing_width}pt</div></div>`;
+}
+
+function renderWarlordTimepoint(d) {
+  const tp = d.timepoint_comparison || {};
+  const labels = Object.keys(tp).sort();
+  if (!labels.length) return;
+  const top1 = labels.map(l => (tp[l].top1_accuracy*100));
+  const top3 = labels.map(l => (tp[l].top3_accuracy*100));
+  const pnl  = labels.map(l => tp[l].avg_pnl);
+  Plotly.newPlot('warlord-timepoint-chart', [
+    { x:labels, y:top1, name:'Top-1 %', type:'bar', marker:{color:'#58a6ff'} },
+    { x:labels, y:top3, name:'Top-3 %', type:'bar', marker:{color:'#3fb950'} },
+    { x:labels, y:pnl, name:'Avg P&L/day', type:'scatter', mode:'lines+markers',
+      yaxis:'y2', marker:{color:'#f0883e',size:10}, line:{color:'#f0883e',width:2} },
+  ], { ...WL_DARK, barmode:'group', margin:{t:30,b:50,l:50,r:60},
+    xaxis:{...WL_GRID, title:'Prediction Time'},
+    yaxis:{...WL_GRID, title:'Accuracy %'},
+    yaxis2:{...WL_GRID, title:'$/day', overlaying:'y', side:'right'},
+    legend:{x:0, y:1.15, orientation:'h'} }, {responsive:true});
+}
+
+function renderWarlordPnL(d) {
+  const preds = d.predictions || [];
+  const dates = preds.map(p => p.date);
+  const cum = d.warlord_cumulative_pnl || [];
+  const daily = preds.map(p => p.warlord_pnl);
+  const colors = daily.map(v => v >= 0 ? '#3fb950' : '#f85149');
+  Plotly.newPlot('warlord-pnl-chart', [
+    { x:dates, y:daily, name:'Daily P&L', type:'bar', marker:{color:colors}, yaxis:'y' },
+    { x:dates, y:cum, name:'Cumulative', type:'scatter', mode:'lines',
+      yaxis:'y2', line:{color:'#58a6ff',width:2} },
+  ], { ...WL_DARK, margin:{t:30,b:60,l:60,r:60},
+    xaxis:{...WL_GRID, tickangle:-45, nticks:20},
+    yaxis:{...WL_GRID, title:'Daily $'},
+    yaxis2:{...WL_GRID, title:'Cumulative $', overlaying:'y', side:'right'},
+    legend:{x:0, y:1.12, orientation:'h'} }, {responsive:true});
+}
+
+function _renderSegChart(elId, segData, title) {
+  if (!segData || !Object.keys(segData).length) return;
+  const labels = Object.keys(segData);
+  const n     = labels.map(l => segData[l].n);
+  const top1  = labels.map(l => (segData[l].top1_accuracy*100));
+  const top3  = labels.map(l => (segData[l].top3_accuracy*100));
+  const pnl   = labels.map(l => segData[l].avg_pnl);
+  const winR  = labels.map(l => (segData[l].win_rate*100));
+  const hText = labels.map((l,i) => `n=${n[i]} | Win=${winR[i].toFixed(0)}% | P&L=$${pnl[i].toFixed(0)}/d`);
+  Plotly.newPlot(elId, [
+    { x:labels, y:top1, name:'Top-1 %', type:'bar', marker:{color:'#58a6ff'}, text:hText, hoverinfo:'text+name' },
+    { x:labels, y:top3, name:'Top-3 %', type:'bar', marker:{color:'#3fb950'} },
+  ], { ...WL_DARK, barmode:'group', margin:{t:10,b:80,l:40,r:10},
+    xaxis:{...WL_GRID, tickangle:-30, tickfont:{size:9}},
+    yaxis:{...WL_GRID, title:'%', range:[0, Math.max(...top3)*1.2]},
+    legend:{x:0, y:1.1, orientation:'h', font:{size:10}},
+    showlegend:true }, {responsive:true});
+}
+
+function renderWarlordSegmentation(d) {
+  _renderSegChart('warlord-seg-vix',      d.vix_regime_results,  'VIX Regime');
+  _renderSegChart('warlord-seg-range',    d.range_comp_results,  'Range Compression');
+  _renderSegChart('warlord-seg-straddle', d.straddle_results,    'Straddle Decay');
+  _renderSegChart('warlord-seg-trend',    d.trend_results,       'Trend State');
+  _renderSegChart('warlord-seg-strike',   d.strike_prox_results, 'Strike Proximity');
+  _renderSegChart('warlord-seg-dow',      d.dow_results,         'Day of Week');
+}
+
+function renderWarlordHeuristicBuckets(d) {
+  const hb = d.heuristic_buckets || {};
+  const labels = Object.keys(hb);
+  if (!labels.length) return;
+  const top1 = labels.map(l => (hb[l].top1_accuracy*100));
+  const top3 = labels.map(l => (hb[l].top3_accuracy*100));
+  const pnl  = labels.map(l => hb[l].avg_pnl);
+  const n    = labels.map(l => hb[l].n);
+  Plotly.newPlot('warlord-heuristic-chart', [
+    { x:labels, y:top1, name:'Top-1 %', type:'bar', marker:{color:'#58a6ff'},
+      text:n.map(v=>`n=${v}`), textposition:'outside' },
+    { x:labels, y:top3, name:'Top-3 %', type:'bar', marker:{color:'#3fb950'} },
+    { x:labels, y:pnl, name:'Avg P&L', type:'scatter', mode:'lines+markers',
+      yaxis:'y2', marker:{color:'#f0883e',size:10}, line:{color:'#f0883e',width:2} },
+  ], { ...WL_DARK, barmode:'group', margin:{t:30,b:60,l:50,r:60},
+    xaxis:{...WL_GRID}, yaxis:{...WL_GRID, title:'%'},
+    yaxis2:{...WL_GRID, title:'$/day', overlaying:'y', side:'right'},
+    legend:{x:0, y:1.12, orientation:'h'} }, {responsive:true});
+}
+
+function renderWarlordFeatures(d) {
+  const fi = (d.feature_importance || []).slice(0, 20);
+  if (!fi.length) return;
+  const names = fi.map(f => f.feature).reverse();
+  const vals  = fi.map(f => f.importance).reverse();
+  Plotly.newPlot('warlord-feature-chart', [{
+    type:'bar', orientation:'h', x:vals, y:names,
+    marker:{color:vals.map((_,i) => WL_COLORS[i % WL_COLORS.length])},
+  }], { ...WL_DARK, margin:{t:10,b:40,l:200,r:20},
+    xaxis:{...WL_GRID, title:'Importance'},
+    yaxis:{...WL_GRID, tickfont:{size:10}} }, {responsive:true});
+}
+
+function renderWarlordHeuristicsTable(d) {
+  const tbody = document.querySelector('#warlord-heuristics-table tbody');
+  tbody.innerHTML = (d.heuristics || []).map(h => `
+    <tr><td>${h.rule}</td><td style="white-space:normal;max-width:400px;">${h.mechanism}</td>
+    <td style="white-space:normal;max-width:300px;">${h.action}</td></tr>`).join('');
+}
+
+function renderWarlordPredictions(d) {
+  const tbody = document.querySelector('#warlord-predictions-table tbody');
+  tbody.innerHTML = (d.predictions || []).map(p => {
+    const zones = p.predicted_zones || [];
+    const z1 = zones[0] ? `${zones[0].strike} (${(zones[0].prob*100).toFixed(0)}%)` : '-';
+    const z2 = zones[1] ? `${zones[1].strike} (${(zones[1].prob*100).toFixed(0)}%)` : '-';
+    const z3 = zones[2] ? `${zones[2].strike} (${(zones[2].prob*100).toFixed(0)}%)` : '-';
+    const hitClass1 = p.top1_hit ? 'up' : '';
+    const hitClass3 = p.top3_hit ? 'up' : 'down';
+    const pnlClass  = p.warlord_pnl >= 0 ? 'up' : 'down';
+    return `<tr>
+      <td>${p.date}</td><td>${p.dow||''}</td>
+      <td>${(+p.spot_at_T).toFixed(0)}</td><td>${(+p.eod_close).toFixed(0)}</td>
+      <td>${z1}</td><td>${z2}</td><td>${z3}</td>
+      <td><b>${p.actual_zone_strike}</b></td>
+      <td class="${hitClass1}">${p.top1_hit?'HIT':'miss'}</td>
+      <td class="${hitClass3}">${p.top3_hit?'HIT':'miss'}</td>
+      <td>${(+p.distance_to_actual).toFixed(1)}</td>
+      <td class="${pnlClass}">$${(+p.warlord_pnl).toFixed(0)}</td>
+      <td>${(+p.heuristic_score).toFixed(0)}</td>
+      <td>${p.vix_level != null ? (+p.vix_level).toFixed(1) : '-'}</td>
+    </tr>`;
+  }).join('');
 }
 
 init();

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Warlord v2 — SPX EOD Pin Prediction</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+
+    header { padding: 20px 32px; border-bottom: 1px solid #21262d; display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 1.3rem; font-weight: 700; }
+    header .sub { font-size: 0.78rem; color: #8b949e; margin-left: auto; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding: 20px 32px 8px; }
+    .card { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 16px; }
+    .card .label { font-size: 0.70rem; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; }
+    .card .value { font-size: 1.4rem; font-weight: 700; margin-top: 4px; }
+    .card .sub   { font-size: 0.75rem; color: #8b949e; margin-top: 3px; }
+    .up      { color: #3fb950; }
+    .down    { color: #f85149; }
+    .neutral { color: #e6edf3; }
+
+    section { padding: 16px 32px 24px; }
+    section h2 { font-size: 0.78rem; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 32px 20px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 0 32px 20px; }
+    @media(max-width: 1100px) { .three-col { grid-template-columns: 1fr; } }
+    @media(max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+    .panel { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 16px; }
+    .panel.scroll { max-height: 500px; overflow-y: auto; }
+    .panel.scroll::-webkit-scrollbar { width: 6px; }
+    .panel.scroll::-webkit-scrollbar-track { background: #0d1117; }
+    .panel.scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    .panel h3 { font-size: 0.76rem; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+
+    .tbl-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #21262d; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.80rem; }
+    th { text-align: left; padding: 8px 12px; color: #8b949e; font-weight: 500; background: #161b22; border-bottom: 1px solid #21262d; white-space: nowrap; }
+    td { padding: 7px 12px; border-bottom: 1px solid #0d1117; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #161b22; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+    .badge.hit  { background:#0d3321; color:#3fb950; }
+    .badge.miss { background:#3b0f0f; color:#f85149; }
+    .badge.skip { background:#2d1f00; color:#e3b341; }
+
+    .chart-box { width: 100%; height: 380px; }
+    #status { padding: 10px 32px; font-size: 0.8rem; color: #8b949e; }
+
+    .strategy-box { background: #161b22; border: 1px solid #21262d; border-left: 3px solid #1f6feb; border-radius: 6px; padding: 14px 18px; margin: 0 32px 16px; font-size: 0.82rem; line-height: 1.7; }
+    .strategy-box b { color: #58a6ff; }
+
+    .heuristic-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #21262d; font-size: 0.80rem; }
+    .heuristic-row:last-child { border-bottom: none; }
+    .heuristic-rule { font-weight: 700; color: #58a6ff; min-width: 200px; flex-shrink: 0; }
+    .heuristic-mech { color: #8b949e; flex: 1; }
+    .heuristic-action { color: #3fb950; font-weight: 600; min-width: 250px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Warlord v2</h1>
+  <span class="sub">SPX EOD Pin Prediction — Stacking Ensemble + Heuristic Scoring</span>
+  <span class="sub" id="last-updated"></span>
+</header>
+
+<div id="status">Loading data...</div>
+
+<div class="strategy-box" id="strategy-box" style="display:none;">
+  <b>Strategy:</b> Sell 1 ATM call + 1 ATM put, buy 1 call +wing, 1 put -wing (20-25 pts).<br>
+  <b>Prediction:</b> At 1:30 PM CST, model outputs top 3 most likely EOD pin strikes with probabilities.<br>
+  <b>Heuristic score</b> (0-100) tells you GO/NO-GO: VIX regime, range compression, VWAP proximity, straddle decay.
+</div>
+
+<div class="grid" id="cards"></div>
+
+<!-- Multi-timepoint comparison + Cumulative P&L -->
+<div class="two-col" style="padding-top: 14px;">
+  <div class="panel">
+    <h3>Accuracy by Prediction Time (closer to close = better)</h3>
+    <div id="timepoint-chart" class="chart-box"></div>
+  </div>
+  <div class="panel">
+    <h3>Cumulative Warlord P&L (Holdout)</h3>
+    <div id="pnl-chart" class="chart-box"></div>
+  </div>
+</div>
+
+<!-- VIX Regime + Heuristic Score breakdown + Feature importance -->
+<div class="three-col">
+  <div class="panel">
+    <h3>VIX Regime Performance</h3>
+    <div id="vix-regime-chart" class="chart-box"></div>
+  </div>
+  <div class="panel">
+    <h3>Heuristic Score Buckets</h3>
+    <div id="heuristic-chart" class="chart-box"></div>
+  </div>
+  <div class="panel scroll">
+    <h3>Feature Importance</h3>
+    <div id="feature-panel"></div>
+  </div>
+</div>
+
+<!-- Predicted vs Actual + Distance histogram -->
+<div class="two-col">
+  <div class="panel">
+    <h3>Predicted vs Actual Close (Holdout)</h3>
+    <div id="scatter-chart" class="chart-box"></div>
+  </div>
+  <div class="panel">
+    <h3>Prediction Distance Distribution</h3>
+    <div id="dist-chart" class="chart-box"></div>
+  </div>
+</div>
+
+<!-- Execution Heuristics -->
+<section>
+  <h2>Execution Heuristics — When to Place the Warlord</h2>
+  <div class="panel" id="heuristics-panel"></div>
+</section>
+
+<!-- Per-day prediction table -->
+<section>
+  <h2>Per-Day Predictions (Holdout)</h2>
+  <div class="tbl-wrap" style="max-height:600px;overflow-y:auto;">
+    <table id="pred-table">
+      <thead><tr>
+        <th>Date</th><th>Spot@1:30</th><th>Score</th><th>VIX</th>
+        <th>Pred #1</th><th>Pred #2</th><th>Pred #3</th>
+        <th>Close</th><th>Dist</th><th>Top-1</th><th>Top-3</th><th>P&L</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+const fmt = (v, d=1) => v != null ? (+v).toFixed(d) : '—';
+const plotColors = { bg: 'transparent', grid: '#21262d', font: '#e6edf3',
+  blue: '#58a6ff', green: '#3fb950', red: '#f85149', yellow: '#e3b341', muted: '#8b949e' };
+const plotLayout = (extra={}) => Object.assign({
+  paper_bgcolor: plotColors.bg, plot_bgcolor: plotColors.bg,
+  font: { color: plotColors.font, size: 11 },
+  margin: { l: 50, r: 20, t: 10, b: 50 },
+  hovermode: 'x unified',
+}, extra);
+
+async function init() {
+  try {
+    const m = await (await fetch('data/warlord_results.json')).json();
+    document.getElementById('status').textContent = '';
+    document.getElementById('strategy-box').style.display = 'block';
+    document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleString()}`;
+    render(m);
+  } catch(e) {
+    document.getElementById('status').textContent = `Error: ${e.message} — run: PYTHONPATH=. uv run python scripts/build_warlord.py`;
+  }
+}
+
+function render(m) {
+  const pnlCls = m.warlord_total_pnl >= 0 ? 'up' : 'down';
+  const ofGap = ((m.train_top1_accuracy - m.holdout_top1_accuracy)*100).toFixed(0);
+
+  // ── Cards ──
+  document.getElementById('cards').innerHTML = [
+    { label:'Top-1 Accuracy', value:(m.holdout_top1_accuracy*100).toFixed(1)+'%', sub:'exact 5pt zone', cls: m.holdout_top1_accuracy >= 0.15 ? 'up' : 'neutral' },
+    { label:'Top-3 Hit Rate', value:(m.holdout_top3_accuracy*100).toFixed(1)+'%', sub:'close in top 3', cls: m.holdout_top3_accuracy >= 0.40 ? 'up' : 'neutral' },
+    { label:'Avg Distance', value:m.holdout_avg_distance+' pts', sub:'to actual close', cls: m.holdout_avg_distance <= 15 ? 'up' : 'neutral' },
+    { label:'Median Dist', value:m.holdout_median_distance+' pts', sub:'50th pctl', cls: m.holdout_median_distance <= 10 ? 'up' : 'neutral' },
+    { label:'Total P&L', value:'$'+m.warlord_total_pnl.toLocaleString(), sub:m.n_holdout+' trades', cls: pnlCls },
+    { label:'Win Rate', value:(m.warlord_win_rate*100).toFixed(1)+'%', sub:'profitable', cls: m.warlord_win_rate >= 0.5 ? 'up' : 'down' },
+    { label:'Features', value:m.n_features_selected+'/'+m.n_features_original, sub:'selected', cls:'neutral' },
+    { label:'Stacking', value:(m.models_used||[]).length+' models', sub:(m.models_used||[]).join(', '), cls:'neutral' },
+    { label:'Overfit Gap', value:ofGap+'pp', sub:'train='+((m.train_top1_accuracy||0)*100).toFixed(0)+'%', cls: ofGap < 30 ? 'up' : 'down' },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div>
+    <div class="value ${c.cls||''}">${c.value}</div><div class="sub">${c.sub}</div></div>`).join('');
+
+  const preds = m.predictions || [];
+
+  // ── Multi-timepoint chart ──
+  const tp = m.timepoint_comparison || {};
+  const tpLabels = Object.keys(tp).sort();
+  if (tpLabels.length) {
+    Plotly.newPlot('timepoint-chart', [
+      { x: tpLabels, y: tpLabels.map(l => (tp[l].top1_accuracy||0)*100), name: 'Top-1 %', type: 'bar', marker:{color:plotColors.blue} },
+      { x: tpLabels, y: tpLabels.map(l => (tp[l].top3_accuracy||0)*100), name: 'Top-3 %', type: 'bar', marker:{color:plotColors.green} },
+    ], plotLayout({ barmode:'group', xaxis:{title:'Prediction Time'}, yaxis:{title:'Accuracy %', gridcolor:plotColors.grid},
+      legend:{x:0.01,y:0.98,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}} }), {responsive:true});
+  }
+
+  // ── Cumulative P&L ──
+  const dates = preds.map(p => p.date);
+  const cumPnl = m.warlord_cumulative_pnl || [];
+  Plotly.newPlot('pnl-chart', [
+    { x: dates, y: cumPnl, type: 'scatter', mode: 'lines+markers',
+      line: { color: plotColors.blue, width: 2 }, marker: { color: cumPnl.map(v => v>=0?plotColors.green:plotColors.red), size: 4 },
+      fill: 'tozeroy', fillcolor: 'rgba(88,166,255,0.06)', name: 'P&L' },
+  ], plotLayout({ xaxis:{gridcolor:plotColors.grid, tickangle:-45, tickfont:{size:9}},
+    yaxis:{title:'P&L ($)', gridcolor:plotColors.grid, zeroline:true, zerolinecolor:'#30363d'} }), {responsive:true});
+
+  // ── VIX Regime chart ──
+  const vrp = m.vix_regime_results || {};
+  const vrpNames = Object.keys(vrp);
+  if (vrpNames.length) {
+    Plotly.newPlot('vix-regime-chart', [
+      { x:vrpNames, y:vrpNames.map(r=>(vrp[r].top1_accuracy||0)*100), name:'Top-1 %', type:'bar', marker:{color:plotColors.blue},
+        text:vrpNames.map(r=>`n=${vrp[r].n}`), textposition:'auto', textfont:{size:9,color:'#8b949e'} },
+      { x:vrpNames, y:vrpNames.map(r=>(vrp[r].top3_accuracy||0)*100), name:'Top-3 %', type:'bar', marker:{color:plotColors.green} },
+    ], plotLayout({ barmode:'group', xaxis:{tickfont:{size:9}}, yaxis:{title:'%', gridcolor:plotColors.grid},
+      legend:{x:0.01,y:0.98,bgcolor:'#161b2299',font:{size:10}} }), {responsive:true});
+  }
+
+  // ── Heuristic score buckets ──
+  const hb = m.heuristic_buckets || {};
+  const hbNames = Object.keys(hb);
+  if (hbNames.length) {
+    Plotly.newPlot('heuristic-chart', [
+      { x:hbNames, y:hbNames.map(b=>(hb[b].top1_accuracy||0)*100), name:'Top-1 %', type:'bar', marker:{color:plotColors.blue},
+        text:hbNames.map(b=>`n=${hb[b].n}`), textposition:'auto', textfont:{size:9,color:'#8b949e'} },
+      { x:hbNames, y:hbNames.map(b=>(hb[b].top3_accuracy||0)*100), name:'Top-3 %', type:'bar', marker:{color:plotColors.green} },
+    ], plotLayout({ barmode:'group', xaxis:{tickfont:{size:9}}, yaxis:{title:'%', gridcolor:plotColors.grid},
+      legend:{x:0.01,y:0.98,bgcolor:'#161b2299',font:{size:10}} }), {responsive:true});
+  }
+
+  // ── Feature importance ──
+  const fi = m.feature_importance || [];
+  const maxImp = fi.length ? fi[0].importance : 1;
+  document.getElementById('feature-panel').innerHTML = fi.map(f => {
+    const w = Math.max(2, f.importance / maxImp * 100);
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+      <span style="font-size:0.72rem;width:170px;text-align:right;flex-shrink:0;">${f.feature}</span>
+      <div style="flex:1;background:#21262d;border-radius:3px;height:13px;">
+        <div style="width:${w}%;background:${plotColors.blue};height:100%;border-radius:3px;"></div>
+      </div>
+      <span style="font-size:0.68rem;color:#8b949e;width:50px;">${f.importance.toFixed(4)}</span>
+    </div>`;
+  }).join('');
+
+  // ── Scatter ──
+  const predStrikes = preds.map(p => p.predicted_zones[0].strike);
+  const actualCloses = preds.map(p => p.eod_close);
+  const colors = preds.map(p => p.top1_hit ? plotColors.green : (p.top3_hit ? plotColors.yellow : plotColors.red));
+  const minP = Math.min(...predStrikes, ...actualCloses) - 10;
+  const maxP = Math.max(...predStrikes, ...actualCloses) + 10;
+  Plotly.newPlot('scatter-chart', [
+    { x:[minP,maxP], y:[minP,maxP], mode:'lines', line:{color:'#30363d',dash:'dash',width:1}, showlegend:false },
+    { x:predStrikes, y:actualCloses, mode:'markers', marker:{color:colors, size:7, line:{width:1,color:'#0d1117'}},
+      text:preds.map(p=>`${p.date}<br>Pred:${p.predicted_zones[0].strike} Close:${p.eod_close}<br>Dist:${p.distance_to_actual}pts Score:${p.heuristic_score}`),
+      hoverinfo:'text', name:'Days' },
+  ], plotLayout({ xaxis:{title:'Predicted Strike',gridcolor:plotColors.grid}, yaxis:{title:'Actual Close',gridcolor:plotColors.grid}, hovermode:'closest' }), {responsive:true});
+
+  // ── Distance histogram ──
+  Plotly.newPlot('dist-chart', [
+    { x:preds.map(p=>p.distance_to_actual), type:'histogram', marker:{color:plotColors.blue, line:{color:'#0d1117',width:1}},
+      xbins:{start:0, size:2.5}, name:'Distance' },
+  ], plotLayout({ xaxis:{title:'Distance (pts)',gridcolor:plotColors.grid}, yaxis:{title:'Count',gridcolor:plotColors.grid}, bargap:0.05 }), {responsive:true});
+
+  // ── Heuristics table ──
+  const heuristics = m.heuristics || [];
+  document.getElementById('heuristics-panel').innerHTML = heuristics.map(h =>
+    `<div class="heuristic-row">
+      <div class="heuristic-rule">${h.rule}</div>
+      <div class="heuristic-mech">${h.mechanism}</div>
+      <div class="heuristic-action">${h.action}</div>
+    </div>`
+  ).join('');
+
+  // ── Prediction table ──
+  const zoneCell = (z) => {
+    if (!z) return '<td>-</td>';
+    return `<td><b>${z.strike}</b> <span style="color:#8b949e;font-size:0.70rem;">${(z.probability*100).toFixed(0)}%</span></td>`;
+  };
+  document.querySelector('#pred-table tbody').innerHTML = preds.map(p => {
+    const zones = p.predicted_zones || [];
+    const scoreCls = p.heuristic_score >= 70 ? 'up' : (p.heuristic_score >= 50 ? 'neutral' : 'down');
+    const pnlColor = p.warlord_pnl >= 0 ? plotColors.green : plotColors.red;
+    return `<tr>
+      <td>${p.date}</td><td>${p.spot_at_T.toFixed(0)}</td>
+      <td class="${scoreCls}"><b>${p.heuristic_score}</b></td>
+      <td>${p.vix_level}</td>
+      ${zoneCell(zones[0])}${zoneCell(zones[1])}${zoneCell(zones[2])}
+      <td><b>${p.eod_close.toFixed(1)}</b></td>
+      <td>${p.distance_to_actual.toFixed(1)}</td>
+      <td><span class="badge ${p.top1_hit?'hit':'miss'}">${p.top1_hit?'HIT':'miss'}</span></td>
+      <td><span class="badge ${p.top3_hit?'hit':'miss'}">${p.top3_hit?'HIT':'miss'}</span></td>
+      <td style="color:${pnlColor};font-weight:600;">$${p.warlord_pnl>=0?'+':''}${p.warlord_pnl.toFixed(0)}</td>
+    </tr>`;
+  }).join('');
+}
+
+init();
+</script>
+</body>
+</html>
