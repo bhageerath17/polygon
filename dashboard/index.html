@@ -93,6 +93,7 @@
   <button class="tab-btn"        onclick="switchTab('tab-reversals', this)">Reversal Analysis</button>
   <button class="tab-btn"        onclick="switchTab('tab-model',     this)">Prediction Model</button>
   <button class="tab-btn"        onclick="switchTab('tab-model2',    this)">Prediction Model 2</button>
+  <button class="tab-btn"        onclick="switchTab('tab-model3',    this)">Model 3 (Holdout)</button>
   <button class="tab-btn"        onclick="switchTab('tab-price',     this)">Price Summary</button>
 </nav>
 
@@ -368,6 +369,59 @@
 </div>
 
 <!-- ════════════════════════════════════════════════
+     TAB 7 — MODEL 3 (HOLDOUT VALIDATION)
+════════════════════════════════════════════════ -->
+<div id="tab-model3" class="tab-panel">
+
+  <!-- Summary cards -->
+  <div class="grid" id="model3-cards"></div>
+
+  <!-- Train vs Holdout comparison -->
+  <div class="two-col" style="padding-top:8px;">
+    <div class="panel" id="model3-split-panel"><h3>Train vs Holdout Comparison</h3></div>
+    <div class="panel" id="model3-feature-panel"><h3>Top Features (30 selected)</h3></div>
+  </div>
+
+  <!-- Confusion matrix + VIX regime -->
+  <div class="two-col">
+    <div class="panel" id="model3-confusion-panel"><h3>Holdout Confusion Matrix</h3></div>
+    <div class="panel"><h3>VIX Regime Performance (Holdout)</h3><div id="model3-vix-regime-chart" style="width:100%;height:280px;"></div></div>
+  </div>
+
+  <!-- SPX chart with holdout predictions -->
+  <section>
+    <h2>SPX 1-Min Candles — Last 7 Trading Days · Model 3 Holdout Predictions</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
+      Only <b style="color:#58a6ff">holdout</b> predictions shown (model never trained on this data).
+      &nbsp;<span style="color:#3fb950">&#9650; Hit</span> &nbsp;|&nbsp;
+      <span style="color:#f85149">&#9660; Miss</span> &nbsp;|&nbsp;
+      <span style="color:#e3b341">&#9670;</span> Predicted weak
+    </p>
+    <div id="spx-plotly-chart3" style="width:100%;height:480px;"></div>
+  </section>
+
+  <!-- Per-event prediction table -->
+  <section>
+    <h2>Per-Event Predictions</h2>
+    <p style="font-size:0.76rem;color:#8b949e;margin-bottom:12px;">
+      <span style="color:#58a6ff">Blue</span> rows = holdout (true out-of-sample).
+      Grey rows = train set (in-sample, for reference only).
+    </p>
+    <div class="tbl-wrap">
+      <table id="model3-events-table">
+        <thead><tr>
+          <th>Date</th><th>Low Time</th><th>Fall</th><th>Reversal</th>
+          <th>Rev. Cat.</th><th>Squeeze</th><th>VIX</th>
+          <th>Prob</th><th>Pred</th><th>Actual</th><th>Result</th><th>Split</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- ════════════════════════════════════════════════
      TAB 6 — PRICE SUMMARY
 ════════════════════════════════════════════════ -->
 <div id="tab-price" class="tab-panel">
@@ -449,6 +503,8 @@ let _spxPriceCache = null;
 let _modelCache    = null;
 let _model2Cache   = null;
 let _model2Loaded  = false;
+let _model3Cache   = null;
+let _model3Loaded  = false;
 
 function switchTab(id, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -473,6 +529,16 @@ function switchTab(id, btn) {
       ['spx-plotly-chart2','model2-vix-regime-chart','model2-fold-chart'].forEach(eid => {
         const el2 = document.getElementById(eid);
         if (el2 && el2.data && el2.data.length) Plotly.Plots.resize(el2);
+      });
+    }
+  }
+  if (id === 'tab-model3') {
+    if (!_model3Loaded && _spxPriceCache) {
+      loadModel3Data(_spxPriceCache);
+    } else {
+      ['spx-plotly-chart3','model3-vix-regime-chart'].forEach(eid => {
+        const el3 = document.getElementById(eid);
+        if (el3 && el3.data && el3.data.length) Plotly.Plots.resize(el3);
       });
     }
   }
@@ -1611,6 +1677,187 @@ function drawSPXPlotly2(spxPrice, eventPredictions) {
     margin:{l:4,r:64,t:36,b:56}, shapes, annotations,
     hovermode:'closest', dragmode:'pan',
     hoverlabel:{bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}},
+    legend:{x:0.01,y:0.98,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}},
+  }, { responsive:true, scrollZoom:true, displayModeBar:true,
+    modeBarButtonsToRemove:['lasso2d','select2d','toggleSpikelines'],
+    modeBarButtonsToAdd:['resetScale2d'] });
+}
+
+/* ── TAB 7 — MODEL 3 (HOLDOUT) ─────────────────── */
+async function loadModel3Data(spxPrice) {
+  try {
+    const m = await loadJSON('model3_results.json');
+    _model3Cache = m;
+    _model3Loaded = true;
+    loadModel3Tab(m, spxPrice);
+  } catch(e) {
+    document.getElementById('model3-cards').innerHTML =
+      '<div class="card" style="grid-column:1/-1"><div class="value neutral">Model 3 data unavailable. Run scripts/build_model3.py first.</div></div>';
+    _model3Loaded = true;
+  }
+}
+
+function loadModel3Tab(m, spxPrice) {
+  if (!m || m.error) {
+    document.getElementById('model3-cards').innerHTML =
+      `<div class="card" style="grid-column:1/-1"><div class="value neutral">${m?.error || 'Model 3 data unavailable'}</div></div>`;
+    return;
+  }
+
+  const hp = (m.holdout_precision * 100).toFixed(1);
+  const hr = (m.holdout_recall * 100).toFixed(1);
+  const ha = (m.holdout_accuracy * 100).toFixed(1);
+  const tp = (m.train_precision * 100).toFixed(1);
+  const ofGap = ((m.train_precision - m.holdout_precision) * 100).toFixed(1);
+  const ofOk = parseFloat(ofGap) <= 15;
+
+  // Cards
+  document.getElementById('model3-cards').innerHTML = [
+    { label:'Holdout Precision',  value: hp + '%',                       sub:'true out-of-sample',         cls: parseFloat(hp) >= 60 ? 'up' : 'neutral' },
+    { label:'Holdout Recall',     value: hr + '%',                       sub:'of actual reversals',        cls: parseFloat(hr) >= 30 ? 'up' : 'neutral' },
+    { label:'Holdout Accuracy',   value: ha + '%',                       sub:`${m.n_holdout} holdout events`, cls:'neutral' },
+    { label:'Features',           value: `${m.n_features_selected}`,     sub:`from ${m.n_features_original} (corr>${m.corr_threshold} dropped)`, cls:'up' },
+    { label:'Overfit Gap',        value: ofGap + 'pp',                   sub:`train=${tp}% vs holdout=${hp}%`, cls: ofOk ? 'up' : 'down' },
+    { label:'Threshold',          value: m.optimal_threshold,            sub:'tuned on train set only',    cls:'neutral' },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div>
+    <div class="value ${c.cls||''}">${c.value}</div><div class="sub">${c.sub}</div></div>`).join('');
+
+  // Train vs Holdout comparison panel
+  const cm_h = m.holdout_confusion_matrix || {};
+  const cm_t = m.train_confusion_matrix || {};
+  document.getElementById('model3-split-panel').innerHTML = `<h3>Train vs Holdout Comparison</h3>
+    <table style="width:100%;font-size:0.82rem;border-collapse:collapse;">
+      <tr style="border-bottom:1px solid #30363d;"><th style="text-align:left;padding:6px;">Metric</th>
+        <th style="padding:6px;">Train (${m.n_train})</th><th style="padding:6px;color:#58a6ff;">Holdout (${m.n_holdout})</th></tr>
+      <tr><td style="padding:6px;">Precision</td><td style="text-align:center;padding:6px;">${tp}%</td>
+        <td style="text-align:center;padding:6px;color:#58a6ff;font-weight:700;">${hp}%</td></tr>
+      <tr><td style="padding:6px;">Recall</td><td style="text-align:center;padding:6px;">${(m.train_recall*100).toFixed(1)}%</td>
+        <td style="text-align:center;padding:6px;color:#58a6ff;font-weight:700;">${hr}%</td></tr>
+      <tr><td style="padding:6px;">TP / FP / TN / FN</td>
+        <td style="text-align:center;padding:6px;">${cm_t.tp}/${cm_t.fp}/${cm_t.tn}/${cm_t.fn}</td>
+        <td style="text-align:center;padding:6px;color:#58a6ff;">${cm_h.tp}/${cm_h.fp}/${cm_h.tn}/${cm_h.fn}</td></tr>
+      <tr><td style="padding:6px;">Date Range</td>
+        <td style="text-align:center;padding:6px;font-size:0.75rem;">${m.train_dates}</td>
+        <td style="text-align:center;padding:6px;font-size:0.75rem;color:#58a6ff;">${m.holdout_dates}</td></tr>
+    </table>`;
+
+  // Feature importance
+  const fi = m.feature_importance || [];
+  const maxImp = fi.length ? fi[0].importance : 1;
+  document.getElementById('model3-feature-panel').innerHTML = `<h3>Top Features (${m.n_features_selected} selected)</h3>` +
+    fi.slice(0, 15).map(f => {
+      const w = Math.max(2, (f.importance / maxImp * 100));
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+        <span style="font-size:0.73rem;width:170px;text-align:right;flex-shrink:0;">${f.feature}</span>
+        <div style="flex:1;background:#21262d;border-radius:3px;height:14px;">
+          <div style="width:${w}%;background:#58a6ff;height:100%;border-radius:3px;"></div>
+        </div>
+        <span style="font-size:0.7rem;color:#8b949e;width:45px;">${f.importance.toFixed(4)}</span>
+      </div>`;
+    }).join('');
+
+  // Confusion matrix
+  document.getElementById('model3-confusion-panel').innerHTML = `<h3>Holdout Confusion Matrix</h3>
+    <table style="width:100%;max-width:260px;margin:0 auto;text-align:center;font-size:0.85rem;border-collapse:collapse;">
+      <tr><td></td><td style="padding:8px;font-weight:600;color:#8b949e;">Pred 0</td><td style="padding:8px;font-weight:600;color:#8b949e;">Pred 1</td></tr>
+      <tr><td style="padding:8px;font-weight:600;color:#8b949e;">Actual 0</td>
+        <td style="padding:12px;background:#0d1117;border:1px solid #30363d;color:#3fb950;font-size:1.1rem;font-weight:700;">${cm_h.tn}</td>
+        <td style="padding:12px;background:#0d1117;border:1px solid #30363d;color:#f85149;font-size:1.1rem;font-weight:700;">${cm_h.fp}</td></tr>
+      <tr><td style="padding:8px;font-weight:600;color:#8b949e;">Actual 1</td>
+        <td style="padding:12px;background:#0d1117;border:1px solid #30363d;color:#e3b341;font-size:1.1rem;font-weight:700;">${cm_h.fn}</td>
+        <td style="padding:12px;background:#0d1117;border:1px solid #30363d;color:#3fb950;font-size:1.1rem;font-weight:700;">${cm_h.tp}</td></tr>
+    </table>`;
+
+  // VIX regime chart
+  const vrp = m.vix_regime_performance || {};
+  const regimeNames = Object.keys(vrp);
+  if (regimeNames.length && typeof Plotly !== 'undefined') {
+    Plotly.newPlot('model3-vix-regime-chart', [
+      { x: regimeNames, y: regimeNames.map(r => (vrp[r].precision||0)*100), name:'Precision', type:'bar', marker:{color:'#58a6ff'} },
+      { x: regimeNames, y: regimeNames.map(r => (vrp[r].recall||0)*100), name:'Recall', type:'bar', marker:{color:'#3fb950'} },
+    ], {
+      barmode:'group', paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+      font:{color:'#e6edf3',size:11}, margin:{l:40,r:20,t:10,b:40},
+      yaxis:{title:'%',gridcolor:'#21262d'},
+      legend:{x:0.7,y:0.95,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}},
+    }, {responsive:true});
+  }
+
+  // SPX Plotly chart with holdout predictions
+  const holdoutPreds = (m.event_predictions||[]).filter(e => e.split === 'holdout');
+  if (spxPrice && holdoutPreds.length) {
+    drawSPXPlotlyModel3(spxPrice, holdoutPreds);
+  }
+
+  // Per-event table
+  const allPreds = m.event_predictions || [];
+  document.querySelector('#model3-events-table tbody').innerHTML = allPreds.map(r => {
+    const isHold = r.split === 'holdout';
+    const bg = isHold ? 'background:rgba(88,166,255,0.08);' : '';
+    const hitCls = r.hit ? 'up' : (r.pred_significant ? 'down' : '');
+    const hitLabel = r.hit ? (r.pred_significant ? 'TP' : 'TN') : (r.pred_significant ? 'FP' : 'FN');
+    return `<tr style="${bg}">
+      <td>${r.date}</td><td>${(r.time_of_low||'').slice(0,5)}</td>
+      <td>${fmt(r.fall_pts,1)}</td><td>${fmt(r.reversal_pts,1)}</td>
+      <td>${r.reversal_category}</td><td>${r.squeeze_strength||'—'}</td>
+      <td>${fmt(r.vix_prev,1)}</td>
+      <td>${(r.pred_prob_significant*100).toFixed(0)}%</td>
+      <td>${r.pred_significant ? '<span class="badge call">YES</span>' : '<span class="badge put">no</span>'}</td>
+      <td>${r.actual_significant ? '<b style="color:#3fb950">1</b>' : '0'}</td>
+      <td class="${hitCls}"><b>${hitLabel}</b></td>
+      <td>${isHold ? '<span style="color:#58a6ff;font-weight:600;">HOLDOUT</span>' : '<span style="color:#8b949e;">train</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function drawSPXPlotlyModel3(spxPrice, preds) {
+  // Reuse same chart logic as model1/2 but for model3 holdout predictions
+  const lastDates = [...new Set(spxPrice.map(r => {
+    const d = r.datetime || r[Object.keys(r)[0]] || '';
+    return d.slice(0, 10);
+  }))].sort().slice(-7);
+
+  const filtered = spxPrice.filter(r => {
+    const d = (r.datetime || r[Object.keys(r)[0]] || '').slice(0, 10);
+    return lastDates.includes(d);
+  });
+
+  if (!filtered.length) return;
+
+  const dt = filtered.map(r => r.datetime || r[Object.keys(r)[0]]);
+  const op = filtered.map(r => parseFloat(r.open));
+  const hi = filtered.map(r => parseFloat(r.high));
+  const lo = filtered.map(r => parseFloat(r.low));
+  const cl = filtered.map(r => parseFloat(r.close));
+
+  const candle = { x:dt, open:op, high:hi, low:lo, close:cl, type:'candlestick',
+    name:'SPX', increasing:{line:{color:'#3fb950'}}, decreasing:{line:{color:'#f85149'}} };
+
+  const traces = [candle];
+
+  // Prediction markers
+  const predDates = new Set(lastDates);
+  const relevantPreds = preds.filter(p => predDates.has(p.date));
+  if (relevantPreds.length) {
+    const mx = relevantPreds.map(p => p.date + 'T' + (p.time_of_low||'12:00:00').slice(0,8));
+    const my = relevantPreds.map(p => {
+      const row = filtered.find(r => (r.datetime||'').startsWith(p.date + 'T' + (p.time_of_low||'12:00').slice(0,5)));
+      return row ? parseFloat(row.low) - 2 : null;
+    });
+    const mc = relevantPreds.map(p => p.hit ? '#3fb950' : (p.pred_significant ? '#f85149' : '#e3b341'));
+    const ms = relevantPreds.map(p => 8 + p.pred_prob_significant * 14);
+    const sym = relevantPreds.map(p => p.pred_significant ? (p.hit ? 'triangle-up' : 'triangle-down') : 'diamond');
+    traces.push({ x:mx, y:my, mode:'markers', marker:{color:mc,size:ms,symbol:sym},
+      name:'Model 3 Holdout', text:relevantPreds.map(p => `${p.date} ${(p.time_of_low||'').slice(0,5)} prob=${(p.pred_prob_significant*100).toFixed(0)}%`),
+      hoverinfo:'text' });
+  }
+
+  const el = document.getElementById('spx-plotly-chart3');
+  Plotly.newPlot(el, traces, {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{color:'#e6edf3',size:11}, margin:{l:60,r:20,t:10,b:40},
+    xaxis:{type:'date',rangeslider:{visible:false},gridcolor:'#21262d'},
+    yaxis:{gridcolor:'#21262d',title:'SPX'},
     legend:{x:0.01,y:0.98,bgcolor:'#161b2299',bordercolor:'#30363d',borderwidth:1,font:{size:10}},
   }, { responsive:true, scrollZoom:true, displayModeBar:true,
     modeBarButtonsToRemove:['lasso2d','select2d','toggleSpikelines'],

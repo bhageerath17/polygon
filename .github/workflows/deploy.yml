@@ -88,6 +88,11 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: PYTHONPATH=. uv run python scripts/build_model2.py
 
+      - name: Build prediction model (Model 3 — holdout validation)
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: PYTHONPATH=. uv run python scripts/build_model3.py
+
       # ── Save updated data back to cache ─────────────────────────────────────
       # actions/cache saves automatically at job end when key matches or is new.
       # No explicit save step needed — the cache action handles it.
@@ -101,6 +106,7 @@ jobs:
           cp data/reversal_analysis.json  dashboard/
           cp data/model_results.json      dashboard/
           cp data/model2_results.json     dashboard/
+          cp data/model3_results.json     dashboard/
 
       - uses: actions/configure-pages@v5
 
